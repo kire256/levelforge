@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ziggy Kong</title>
+    <style>
+        body {
+            background: #1a1a2e;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            font-family: 'Courier New', monospace;
+            color: #fff;
+        }
+        h1 { margin-bottom: 10px; color: #ff6b6b; text-shadow: 2px 2px #000; }
+        canvas { border: 4px solid #4a4a6a; background: #0f0f23; image-rendering: pixelated; }
+        .controls { margin-top: 15px; color: #888; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <h1>🐵 ZIGGY KONG</h1>
+    <canvas id="game" width="500" height="550"></canvas>
+    <div class="controls">← → Move | SPACE Jump | R Restart</div>
+    <script>
+        const canvas = document.getElementById('game');
+        const ctx = canvas.getContext('2d');
+        
+        // Audio context for sound effects
+        let audioCtx = null;
+        function initAudio() {
+            if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        function playSound(type) {
+            if(!audioCtx) return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            if(type === 'jump') { osc.frequency.value = 400; gain.gain.setValueAtTime(0.1, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1); osc.start(); osc.stop(audioCtx.currentTime + 0.1); }
+            if(type === 'score') { osc.frequency.value = 800; osc.frequency.setValueAtTime(800, audioCtx.currentTime); osc.frequency.setValueAtTime(1200, audioCtx.currentTime + 0.1); gain.gain.setValueAtTime(0.1, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.2); osc.start(); osc.stop(audioCtx.currentTime + 0.2); }
+            if(type === 'die') { osc.frequency.value = 200; osc.frequency.exponentialRampToValueAtTime(50, audioCtx.currentTime + 0.3); gain.gain.setValueAtTime(0.2, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3); osc.start(); osc.stop(audioCtx.currentTime + 0.3); }
+            if(type === 'throw') { osc.frequency.value = 150; gain.gain.setValueAtTime(0.05, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.05); osc.start(); osc.stop(audioCtx.currentTime + 0.05); }
+        }
+        
+        const PLAYER = { x: 50, y: 480, w: 24, h: 32, vx: 0, vy: 0, onGround: false };
+        const GRAVITY = 0.5;
+        const JUMP = -11;
+        const SPEED = 4;
+        
+        // Longer platforms
+        const platforms = [
+            { x: 0, y: 520, w: 500, h: 30 },
+            { x: 30, y: 440, w: 160, h: 15 },
+            { x: 280, y: 400, w: 160, h: 15 },
+            { x: 80, y: 320, w: 160, h: 15 },
+            { x: 280, y: 260, w: 160, h: 15 },
+            { x: 100, y: 180, w: 180, h: 15 },
+            { x: 300, y: 120, w: 140, h: 15 },
+        ];
+        
+        let barrels = [];
+        let score = 0;
+        let lives = 3;
+        let gameOver = false;
+        let keys = {};
+        let lastThrow = 0;
+        const THROW_INTERVAL = 3500; // 3.5 seconds
+        const kong = { x: 320, y: 80, w: 50, h: 50 };
+        
+        document.addEventListener('keydown', e => { 
+            keys[e.code] = true; 
+            if(e.code === 'KeyR') { reset(); initAudio(); }
+        });
+        document.addEventListener('keyup', e => keys[e.code] = false);
+        
+        function reset() {
+            PLAYER.x = 50; PLAYER.y = 480; PLAYER.vx = 0; PLAYER.vy = 0;
+            barrels = [];
+            if(lives <= 0) { lives = 3; score = 0; gameOver = false; }
+        }
+        
+        function spawnBarrel() {
+            if(gameOver) return;
+            barrels.push({ x: kong.x + 10, y: kong.y + 40, vx: -2 - Math.random() * 2, vy: 0 });
+            playSound('throw');
+        }
+        
+        function update(now) {
+            if(gameOver) return;
+            
+            // Throw barrels every 3-4 seconds
+            if(now - lastThrow > THROW_INTERVAL) { spawnBarrel(); lastThrow = now; }
+            
+            if(keys['ArrowLeft'] || keys['KeyA']) PLAYER.vx = -SPEED;
+            else if(keys['ArrowRight'] || keys['KeyD']) PLAYER.vx = SPEED;
+            else PLAYER.vx = 0;
+            
+            if((keys['Space'] || keys['ArrowUp'] || keys['KeyW']) && PLAYER.onGround) {
+                PLAYER.vy = JUMP;
+                PLAYER.onGround = false;
+                playSound('jump');
+            }
+            
+            PLAYER.vy += GRAVITY;
+            PLAYER.x += PLAYER.vx;
+            PLAYER.y += PLAYER.vy;
+            
+            PLAYER.onGround = false;
+            for(let p of platforms) {
+                if(PLAYER.x + PLAYER.w > p.x && PLAYER.x < p.x + p.w &&
+                   PLAYER.y + PLAYER.h > p.y && PLAYER.y + PLAYER.h < p.y + p.h + 12 &&
+                   PLAYER.vy >= 0) {
+                    PLAYER.y = p.y - PLAYER.h;
+                    PLAYER.vy = 0;
+                    PLAYER.onGround = true;
+                }
+            }
+            
+            PLAYER.x = Math.max(0, Math.min(canvas.width - PLAYER.w, PLAYER.x));
+            if(PLAYER.y > canvas.height) {
+                lives--; playSound('die');
+                if(lives <= 0) gameOver = true;
+                else { PLAYER.x = 50; PLAYER.y = 480; PLAYER.vx = 0; PLAYER.vy = 0; barrels = []; }
+            }
+            
+            for(let b of barrels) {
+                // Barrels move and bounce
+                b.x += b.vx;
+                b.vy += GRAVITY * 0.8;
+                b.y += b.vy;
+                
+                // Bounce off platforms
+                for(let p of platforms) {
+                    if(b.x + 16 > p.x && b.x < p.x + p.w &&
+                       b.y + 16 > p.y && b.y + 16 < p.y + p.h && b.vy >= 0) {
+                        b.y = p.y - 16;
+                        b.vy = -b.vy * 0.4; // Bounce with energy loss
+                        b.vx = (Math.random() > 0.5 ? 1 : -1) * (2 + Math.random() * 2);
+                    }
+                }
+                
+                // Bounce off walls
+                if(b.x < 0 || b.x > canvas.width - 20) {
+                    b.vx = -b.vx;
+                    b.x = Math.max(0, Math.min(canvas.width - 20, b.x));
+                }
+                
+                // Player collision
+                if(Math.abs(PLAYER.x + PLAYER.w/2 - b.x) < 18 && 
+                   Math.abs(PLAYER.y + PLAYER.h/2 - b.y) < 18) {
+                    lives--; playSound('die');
+                    if(lives <= 0) gameOver = true;
+                    else { PLAYER.x = 50; PLAYER.y = 480; PLAYER.vx = 0; PLAYER.vy = 0; barrels = []; }
+                }
+                
+                if(b.y > canvas.height) b.remove = true;
+            }
+            barrels = barrels.filter(b => !b.remove);
+            
+            // Grab banana = 100 points
+            const goal = { x: 360, y: 80, w: 20, h: 20 };
+            if(PLAYER.x + PLAYER.w > goal.x && PLAYER.x < goal.x + goal.w &&
+               PLAYER.y + PLAYER.h > goal.y && PLAYER.y < goal.y + goal.h) {
+                score += 100; playSound('score');
+                // Reset player to bottom
+                PLAYER.x = 50; PLAYER.y = 480; PLAYER.vx = 0; PLAYER.vy = 0;
+            }
+        }
+        
+        function draw() {
+            ctx.fillStyle = '#0f0f23';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Platforms
+            ctx.fillStyle = '#8b4513';
+            for(let p of platforms) {
+                ctx.fillRect(p.x, p.y, p.w, p.h);
+                ctx.fillStyle = '#a0522d';
+                ctx.fillRect(p.x, p.y, p.w, 4);
+                ctx.fillStyle = '#8b4513';
+            }
+            
+            // Banana goal
+            ctx.fillStyle = '#ffd700';
+            ctx.beginPath();
+            ctx.arc(370, 90, 10, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Donkey Kong
+            ctx.fillStyle = '#8b4513';
+            ctx.fillRect(kong.x, kong.y, kong.w, kong.h);
+            ctx.fillStyle = '#ffccaa';
+            ctx.fillRect(kong.x + 12, kong.y + 8, 26, 18);
+            // Kong eyes
+            ctx.fillStyle = '#000';
+            ctx.fillRect(kong.x + 15, kong.y + 12, 6, 6);
+            ctx.fillRect(kong.x + 30, kong.y + 12, 6, 6);
+            
+            // Barrels
+            ctx.fillStyle = '#cd853f';
+            for(let b of barrels) {
+                ctx.beginPath();
+                ctx.arc(b.x, b.y, 14, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = '#8b4513';
+                ctx.lineWidth = 3;
+                ctx.stroke();
+                // Barrel bands
+                ctx.beginPath(); ctx.moveTo(b.x-14, b.y-5); ctx.lineTo(b.x+14, b.y-5); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(b.x-14, b.y+5); ctx.lineTo(b.x+14, b.y+5); ctx.stroke();
+            }
+            
+            // Player
+            ctx.fillStyle = '#ff0000';
+            ctx.fillRect(PLAYER.x, PLAYER.y, PLAYER.w, PLAYER.h);
+            ctx.fillStyle = '#ffccaa';
+            ctx.fillRect(PLAYER.x + 4, PLAYER.y + 4, 16, 12);
+            // Player eyes
+            ctx.fillStyle = '#000';
+            ctx.fillRect(PLAYER.x + 6, PLAYER.y + 6, 4, 4);
+            ctx.fillRect(PLAYER.x + 14, PLAYER.y + 6, 4, 4);
+            
+            // HUD
+            ctx.fillStyle = '#fff';
+            ctx.font = '20px Courier New';
+            ctx.fillText('Score: ' + score, 15, 30);
+            ctx.fillText('Lives: ' + '❤️'.repeat(lives), 320, 30);
+            
+            if(gameOver) {
+                ctx.fillStyle = 'rgba(0,0,0,0.8)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#ff0000';
+                ctx.font = '45px Courier New';
+                ctx.fillText('GAME OVER', 110, 250);
+                ctx.fillStyle = '#fff';
+                ctx.font = '22px Courier New';
+                ctx.fillText('Final Score: ' + score, 150, 300);
+                ctx.fillText('Press R to restart', 140, 340);
+            }
+        }
+        
+        let lastTime = 0;
+        function loop(time) {
+            update(time);
+            draw();
+            requestAnimationFrame(loop);
+        }
+        requestAnimationFrame(loop);
+    </script>
+</body>
+</html>
