@@ -42,7 +42,7 @@ Game developers face three core challenges in level design:
 
 ## 4. Product Vision
 
-**V1 (Free):** A functional level generator that creates playable platformer/puzzle levels from text prompts, exportable as JSON/ASCII maps.
+**V1 (Free):** A functional level generator that creates playable platformer levels from text prompts, exportable as JSON/ASCII maps. Focus on linear single-path levels.
 
 **V2 (Paid):** Full level design suite with:
 - Multiple genre support (platformer, puzzle, shooter, RPG)
@@ -51,13 +51,19 @@ Game developers face three core challenges in level design:
 - Auto-playtesting feedback (difficulty analysis, bottleneck detection)
 - Visual level editor
 
+**V2.5 (Paid Expansion):** Metroidvania & Complex Maps
+- Multiple goals and objectives
+- Soft gating (ability/item based)
+- Hard gating (story/progression based)
+- Multi-path branching maps
+
 **V3 (Future):** Multiplayer collaboration, community sharing, ML-based difficulty balancing
 
 ---
 
 ## 5. Feature Specifications
 
-### V1 - Free Version
+### V1 - Free Version (Linear Levels)
 
 | Feature | Description | Output Format |
 |---------|-------------|---------------|
@@ -96,6 +102,23 @@ Game developers face three core challenges in level design:
 
 ---
 
+### V2.5 - Metroidvania Expansion
+
+| Feature | Description |
+|---------|-------------|
+| **Multiple Goals** | Design levels with 2+ objectives (collect all keys, defeat all bosses, reach all exits) |
+| **Soft Gating** | Ability-based barriers (double jump, wall jump, dash, grapple) |
+| **Hard Gating** | Story/progression gates (requires key item, story flag, boss defeat) |
+| **Multi-Path Branching** | Non-linear maps with multiple routes to objectives |
+| **Backtracking Routes** | Areas accessible only after acquiring new abilities |
+| **Ability Graph** | Visual representation of progression path |
+| **Lock & Key Placement** | Strategic key/door placement with logical flow |
+| **Metroidvania Templates** | Pre-built prompts: "metroidvania with 3 abilities", "backtrack-heavy dungeon" |
+
+**Pricing:** Add-on ($9.99) or included in subscription
+
+---
+
 ## 6. Technical Architecture
 
 ### Core Components
@@ -107,16 +130,17 @@ Game developers face three core challenges in level design:
 │  User Interface (Web/Desktop)                               │
 │  ├── Prompt Input (Natural Language)                        │
 │  ├── Visual Editor (Canvas-based)                          │
-│  ├── Preview Player (HTML5/WebGL)                         │
+│  ├── Preview Player (HTML5/WebGL)                          │
 │  └── Export Panel                                          │
 ├─────────────────────────────────────────────────────────────┤
-│  AI Processing Layer                                       │
-│  ├── LLM Prompt Engineering (OpenAI Codex, z.ai, Ollama) │
+│  AI Processing Layer                                         │
+│  ├── LLM Prompt Engineering (OpenAI Codex, z.ai, Ollama)  │
 │  ├── Level Schema Validation                               │
 │  ├── Difficulty Scoring Model                              │
-│  └── Playtest Simulation                                   │
+│  ├── Playtest Simulation                                   │
+│  └── Gating Logic Validator                                │
 ├─────────────────────────────────────────────────────────────┤
-│  Export Engine                                             │
+│  Export Engine                                              │
 │  ├── JSON Serializer                                       │
 │  ├── Godot Scene Generator (.tscn)                        │
 │  ├── Unity Prefab Builder                                  │
@@ -138,7 +162,8 @@ Game developers face three core challenges in level design:
 | Task | Model | Rationale |
 |------|-------|-----------|
 | Level generation | Codex (GPT-5.3) | Best for structured, technical output |
-| Refinement/iteration | z.ai (GLM-5) | Cost-effective, good coding能力 |
+| Metroidvania logic | Codex (GPT-5.3) | Complex gating relationships |
+| Refinement/iteration | z.ai (GLM-5) | Cost-effective, good coding ability |
 | Offline mode | Ollama (small models) | No API dependency |
 | Difficulty analysis | Lightweight model | Fast, doesn't need reasoning |
 
@@ -146,7 +171,7 @@ Game developers face three core challenges in level design:
 
 ## 7. User Flows
 
-### V1 Flow (Free)
+### V1 Flow (Free - Linear)
 
 ```
 1. User opens app
@@ -159,7 +184,7 @@ Game developers face three core challenges in level design:
 8. User imports into their own Godot project manually
 ```
 
-### V2 Flow (Paid)
+### V2 Flow (Paid - Full Features)
 
 ```
 1. User opens app
@@ -171,6 +196,24 @@ Game developers face three core challenges in level design:
 7. AI refines → re-runs playtest analysis
 8. User exports directly to Godot (.tscn) or Unity (.prefab)
 9. Opens Godot → level is a ready scene
+```
+
+### V2.5 Flow (Metroidvania)
+
+```
+1. User selects "Metroidvania" mode
+2. Selects abilities for the game: Double Jump, Wall Jump, Dash, Grapple
+3. Types prompt: "A Metroidvania with 3 ability gates, 2 keys, and a final boss"
+4. AI generates:
+   - Multiple branching paths
+   - Soft gates tied to abilities (locked until player has ability)
+   - Hard gates tied to items (collect key to open door)
+   - Backtrack routes (areas accessible only after getting new ability)
+5. User reviews ability graph visualization
+6. AI validates gating logic (no impossible locks)
+7. User refines: "Add a shortcut after getting dash"
+8. Auto-playtest analyzes ability unlock sequence
+9. Exports to Godot with proper ability/gate nodes
 ```
 
 ---
@@ -187,6 +230,27 @@ Game developers face three core challenges in level design:
 | 12 | 15,000 | 5% | $15,000 |
 
 *Assumes $19.99 one-time price, 30% Itch.io fee*
+
+### Pricing Tiers
+
+**Free Tier ($0)**
+- Linear levels only
+- JSON/ASCII export
+- Basic preview
+
+**Pro Tier ($19.99)**
+- Full V2 features
+- Engine exports
+- Auto-playtest
+- Parameter sliders
+
+**Metroidvania Add-on ($9.99)**
+- OR included in $4.99/mo subscription
+
+**Subscription ($4.99/mo)**
+- All features
+- Early access to new features
+- Priority support
 
 ### Pricing Psychology
 
@@ -206,7 +270,7 @@ Game developers face three core challenges in level design:
 ### Phase 1: V1 - MVP (Weeks 1-4)
 - [ ] Basic prompt input UI
 - [ ] LLM integration for level generation
-- [ ] JSON output schema
+- [ ] JSON output schema (linear only)
 - [ ] ASCII visualizer
 - [ ] HTML5 preview player
 - [ ] Basic iteration (1-2 refinements)
@@ -228,7 +292,19 @@ Game developers face three core challenges in level design:
 **Time Investment:** ~120 hours
 **Deliverable:** Sellable product
 
-### Phase 3: V3 - Growth (Weeks 13-24)
+### Phase 2.5: Metroidvania (Weeks 13-18)
+- [ ] Multiple goals system
+- [ ] Soft gating (ability-based)
+- [ ] Hard gating (item/story-based)
+- [ ] Multi-path branching logic
+- [ ] Ability graph visualization
+- [ ] Gating validation (no impossible locks)
+- [ ] Backtrack route detection
+
+**Time Investment:** ~80 hours
+**Deliverable:** Complete metroidvania support
+
+### Phase 3: V3 - Growth (Weeks 19-24)
 - [ ] Unreal export
 - [ ] Community features (share levels)
 - [ ] Subscription model test
@@ -245,6 +321,7 @@ Game developers face three core challenges in level design:
 | Risk | Likelihood | Impact | Mitigation |
 |------|------------|--------|------------|
 | AI produces invalid levels | Medium | Medium | Schema validation, fallback to templates |
+| AI produces impossible gating | Medium | High | Gating validator, ability graph analysis |
 | API costs too high | High | High | Ollama offline mode, token budgeting |
 | Low conversion | Medium | High | Free V1 builds audience, email capture |
 | Platform engine changes break export | Medium | Medium | Version-specific exporters, tests |
@@ -260,13 +337,13 @@ Game developers face three core challenges in level design:
 
 ## 11. Success Metrics
 
-| Metric | V1 Goal | V3 Goal |
-|--------|---------|---------|
-| Downloads (Itch.io) | 1,000 | 20,000 |
-| GitHub Stars | 200 | 2,000 |
-| Email List | 100 | 2,000 |
-| Paid Sales | - | 500/month |
-| Revenue | $0 | $5,000/month |
+| Metric | V1 Goal | V2.5 Goal | V3 Goal |
+|--------|---------|------------|---------|
+| Downloads (Itch.io) | 1,000 | 10,000 | 20,000 |
+| GitHub Stars | 200 | 1,000 | 2,000 |
+| Email List | 100 | 1,000 | 2,000 |
+| Paid Sales | - | 300/month | 500/month |
+| Revenue | $0 | $3,000/month | $5,000/month |
 
 ---
 
@@ -279,15 +356,19 @@ Game developers face three core challenges in level design:
 5. **Week 5:** Begin V2 development with email list warm-up
 6. **Week 8:** Pre-launch V2 waitlist
 7. **Week 12:** V2 launch
+8. **Week 13:** Start metroidvania features
+9. **Week 18:** V2.5 launch
+10. **Week 19:** Begin V3 features
 
 ---
 
-## Appendix: Level JSON Schema (V1)
+## Appendix A: Level JSON Schema (V1 - Linear)
 
 ```json
 {
   "version": "1.0",
   "genre": "platformer",
+  "type": "linear",
   "theme": "default",
   "difficulty": "medium",
   "platforms": [
@@ -309,6 +390,118 @@ Game developers face three core challenges in level design:
 
 ---
 
-*Document Version: 1.0*  
+## Appendix B: Level JSON Schema (V2.5 - Metroidvania)
+
+```json
+{
+  "version": "2.5",
+  "genre": "platformer",
+  "type": "metroidvania",
+  "theme": "ancient ruins",
+  "difficulty": "medium",
+  "abilities": ["double_jump", "wall_jump", "dash", "grapple"],
+  
+  "goals": [
+    { "id": "exit_main", "type": "exit", "x": 800, "y": 100 },
+    { "id": "key_red", "type": "collectible", "x": 200, "y": 300, "item_id": "key_red" },
+    { "id": "key_blue", "type": "collectible", "x": 600, "y": 400, "item_id": "key_blue" },
+    { "id": "boss_tutorial", "type": "enemy", "x": 400, "y": 200, "enemy_type": "boss_mini" }
+  ],
+  
+  "gates": [
+    {
+      "id": "gate_dash",
+      "type": "soft",
+      "requires_ability": "dash",
+      "position": { "x": 500, "y": 250 },
+      "blocks_path": "upper_route"
+    },
+    {
+      "id": "door_red",
+      "type": "hard",
+      "requires_item": "key_red",
+      "position": { "x": 700, "y": 150 },
+      "leads_to": "exit_main"
+    },
+    {
+      "id": "gate_grapple",
+      "type": "soft",
+      "requires_ability": "grapple",
+      "position": { "x": 300, "y": 100 },
+      "blocks_path": "treasure_path"
+    }
+  ],
+  
+  "regions": [
+    {
+      "id": "starting_area",
+      "bounds": { "x": 0, "y": 400, "width": 250, "height": 150 },
+      "accessible_abilities": [],
+      "required_for_completion": ["key_red"]
+    },
+    {
+      "id": "upper_platforms",
+      "bounds": { "x": 250, "y": 150, "width": 300, "height": 200 },
+      "accessible_abilities": ["dash", "double_jump"],
+      "required_for_completion": []
+    }
+  ],
+  
+  "backtrack_opportunities": [
+    {
+      "after_ability": "dash",
+      "newly_accessible": ["upper_platforms", "key_blue"],
+      "shortcut_to": "starting_area"
+    }
+  ],
+  
+  "platforms": [
+    { "x": 0, "y": 480, "width": 500, "height": 30 },
+    { "x": 50, "y": 400, "width": 150, "height": 15 }
+  ],
+  
+  "entities": [
+    { "type": "player_spawn", "x": 50, "y": 450 },
+    { "type": "ability_pickup", "x": 150, "y": 380, "ability": "double_jump" }
+  ],
+  
+  "ability_unlock_sequence": [
+    "double_jump",
+    "dash", 
+    "grapple"
+  ],
+  
+  "metadata": {
+    "estimated_duration_seconds": 480,
+    "difficulty_score": 6.5,
+    "gating_valid": true,
+    "no_impossible_locks": true
+  }
+}
+```
+
+---
+
+## Appendix C: Gating Logic Validation Rules
+
+### Soft Gating Rules
+1. Player must have ability BEFORE encountering gate
+2. Ability must be obtainable BEFORE the gate in progression
+3. No soft-gated areas should be required for main progression
+
+### Hard Gating Rules
+1. Key/item must be obtainable BEFORE the locked door
+2. Key placement must not require the ability the door unlocks
+3. No circular dependencies (A→B→A locks)
+
+### Progression Validation
+1. Player can always reach at least one goal from spawn
+2. All gates can be unlocked through normal play
+3. No dead ends (areas with no return and no objective)
+
+---
+
+*Document Version: 2.0*  
 *Created: 2026-02-21*  
-*Author: LevelForge AI Design*
+*Author: LevelForge AI Design*  
+*Changelog: Added V2.5 Metroidvania features, expanded schema*
