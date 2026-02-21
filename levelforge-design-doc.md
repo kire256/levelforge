@@ -94,11 +94,52 @@ Game developers face three core challenges in level design:
 | **Theme/Style Presets** | "Cyberpunk city", "Haunted forest", "Desert temple" - applies visual context |
 | **Parameter Controls** | Difficulty slider, length slider, enemy density, puzzle complexity |
 | **Save/Load Projects** | Local project files for ongoing work |
+| **Tileset Analyzer** | Upload a tileset → AI analyzes and generates tilemap connection rules automatically |
 | **Priority Support** | Discord/email support |
 
 **Pricing:** $19.99 (one-time) or $4.99/month subscription
 
 **Platforms:** Itch.io (primary), Gumroad (backup)
+
+---
+
+### V2 - Tileset Analyzer Feature
+
+| Feature | Description |
+|---------|-------------|
+| **Upload Tileset** | Drag & drop PNG/JPG tileset image |
+| **Auto Tile Detection** | AI detects tile size (16x16, 32x32, etc.) and splits into individual tiles |
+| **Edge Analysis** | Computer vision analyzes each tile's edges to determine connections |
+| **Connection Rules** | Automatically generates tilemap rules (which tiles connect to which) |
+| **Preview & Confirm** | Visual preview of tile connections; user confirms or adjusts |
+| **Export Rules** | Outputs Godot TileSet resource or Unity Tilemap JSON |
+| **Tagging** | AI suggests tile tags (grass, wall, water, door) based on visual patterns |
+
+**Technical Approach:**
+
+```
+1. Load tileset image
+2. Detect grid (find repeating tile boundaries via pattern recognition)
+3. Split into individual tile images
+4. For each tile:
+   - Extract edge pixels (top, bottom, left, right)
+   - Classify each edge as: solid, open, corner, T-junction
+   - Match against known tile patterns
+5. Build connection graph
+6. Generate engine-specific tilemap rules
+7. User reviews, adjusts, confirms
+```
+
+**AI Classification Logic:**
+- **Solid:** Edge is fully opaque → connects to other solids
+- **Open:** Edge is fully transparent → connects to open edges
+- **Corner:** L-shaped edge pattern → connects at corners
+- **T-Junction:** T-shaped pattern → connects on 3 sides
+
+**Supported Tile Types:**
+- Platformer: ground, platforms, walls, hazards, collectibles
+- Top-down: floor, wall, door, water, grass
+- General: animated tiles, decorative layers
 
 ---
 
@@ -288,6 +329,7 @@ Game developers face three core challenges in level design:
 - [ ] Bottleneck detection
 - [ ] Parameter sliders
 - [ ] Paid release ($19.99)
+- [ ] Tileset analyzer (upload tileset → auto-generate tilemap rules)
 
 **Time Investment:** ~120 hours
 **Deliverable:** Sellable product
