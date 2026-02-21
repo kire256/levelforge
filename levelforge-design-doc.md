@@ -85,6 +85,12 @@ Game developers face three core challenges in level design:
 | Feature | Description |
 |---------|-------------|
 | **Multi-Genre Support** | Platformer, Puzzle, Shooter, Top-down RPG, Dungeon crawler |
+| **Player Capabilities** | Define jump height, double jump, dash, wall jump, grapple, etc. |
+| **Ability Presets** | Pre-built templates: "Mario", "Celeste", "Metroidvania", "Custom" |
+| **Platformer Physics** | Configure gravity, air control, coyote time, jump buffer |
+| **Integrated Playtest** | AI simulates playthrough, validates level is clearable |
+| **Difficulty Rating** | Automated difficulty score based on abilities vs. level design |
+| **Fun Factor Analysis** | Detects boring/repetitive sections, suggests improvements |
 | **Godot Export** | Native .tscn generation with nodes, collisions, entities |
 | **Unity Export** | Prefab bundles with components |
 | **Unreal Export** | Blueprint-compatible data |
@@ -100,6 +106,58 @@ Game developers face three core challenges in level design:
 **Pricing:** $19.99 (one-time) or $4.99/month subscription
 
 **Platforms:** Itch.io (primary), Gumroad (backup)
+
+---
+
+### V2 - Player Capabilities & Playtest Feature
+
+| Feature | Description |
+|---------|-------------|
+| **Player Parameters** | Define max jump height, horizontal speed, double jump, wall jump, dash, grapple, etc. |
+| **Ability Presets** | Pre-built templates: "Mario-style", "Celeste-style", "Metroidvania", "Custom" |
+| **Platformer Physics** | Specify gravity, air control, coyote time, jump buffer for accurate difficulty |
+| **Level Constraints** | AI designs levels that are actually clearable with the defined abilities |
+| **Integrated Playtest** | Built-in physics simulation runs through the level |
+| **Pathfinding Validation** | Confirms a valid path exists from start to goal |
+| **Difficulty Rating** | AI rates difficulty based on abilities (1-10 scale) |
+| **Fun Factor Analysis** | Detects repetitive sections, impossible jumps, boring stretches |
+| **Playtest Report** | Visual heatmap showing difficulty hotspots, suggested improvements |
+
+**User Flow:**
+
+```
+1. User selects "Platformer" genre
+2. User configures player abilities:
+   - Jump height: 120px
+   - Double jump: enabled
+   - Wall jump: enabled  
+   - Dash: enabled, 200px range
+   - Max horizontal speed: 300px/s
+3. User describes level: "3-minute platforming section with increasing difficulty"
+4. AI generates level CONSIDERING player abilities
+5. Playtest runs automatically:
+   - Simulates optimal play path
+   - Identifies impossible sections
+   - Rates difficulty curve
+6. User sees playtest report → can refine with AI
+```
+
+**Playtest Validation Checks:**
+
+| Check | Description |
+|-------|-------------|
+| **Reachability** | Every platform is reachable with defined abilities |
+| **No impossible jumps** | All gaps are clearable with max jump/dash |
+| **Save points** | Checkpoints placed reasonably (not too far apart) |
+| **Death zones** | Hazardous areas have reasonable risk |
+| **Flow** | No jarring difficulty spikes or repetitive sections |
+| **Optimal path** | Finds and validates fastest route through level |
+
+**Difficulty Factors:**
+- Gap distances vs. max jump
+- Enemy placement vs. player attack range
+- Verticality vs. available jumps
+- Hazard density vs. reaction time windows
 
 ---
 
