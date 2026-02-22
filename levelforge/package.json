@@ -1,0 +1,16 @@
+{
+  "name": "levelforge",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "levelforge-ui"
+  ],
+  "scripts": {
+    "api": "python -m levelforge-api.main",
+    "ui": "cd levelforge-ui && npm run dev",
+    "dev": "concurrently \"npm run api\" \"npm run ui\""
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.0"
+  }
+}
