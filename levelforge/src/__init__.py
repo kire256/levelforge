@@ -2,10 +2,10 @@
 LevelForge AI - Core schemas and data structures.
 """
 
-from .level import Level, LevelType, Genre
-from .player import PlayerCapabilities, Ability, PhysicsParams
-from .platform import Platform
-from .entity import Entity, EntityType
+from .core.schemas.level import Level, LevelType, Genre
+from .core.schemas.player import PlayerCapabilities, Ability, PhysicsParams
+from .core.schemas.platform import Platform
+from .core.schemas.entity import Entity, EntityType
 
 __all__ = [
     "Level",
