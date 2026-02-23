@@ -48,19 +48,6 @@ def get_generator() -> LevelGenerator:
     return _generator
 
 
-def recreate_generator(model: str) -> LevelGenerator:
-    """Recreate the generator with a new model."""
-    global _generator, _current_model
-    _current_model = model
-    try:
-        _generator = create_generator(client_type="ollama", model=model, base_url="http://192.168.68.76:11434")
-        logger.info(f"Level generator recreated with model {model}")
-    except Exception as e:
-        logger.error(f"Failed to recreate generator: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to switch to model {model}")
-    return _generator
-
-
 # Request models
 class GenerationRequest(BaseModel):
     genre: str = "platformer"
@@ -106,17 +93,47 @@ async def health():
 
 @app.get("/api/models")
 async def get_models():
-    """Get available AI models from Ollama."""
+    """Get available AI models from all providers."""
+    import requests
+    
+    result = {
+        "providers": {},
+        "current": _current_model,
+        "current_provider": _current_provider
+    }
+    
+    # Get Ollama models
     try:
-        import requests
         resp = requests.get("http://192.168.68.76:11434/api/tags", timeout=5)
         models = resp.json().get("models", [])
-        return {
-            "ollama": [{"name": m["name"], "size": m.get("size", 0)} for m in models],
-            "current": _current_model
-        }
-    except Exception as e:
-        return {"error": str(e), "ollama": [], "current": _current_model}
+        result["providers"]["ollama"] = [{"name": f"ollama:{m['name']}", "display": m["name"], "size": m.get("size", 0)} for m in models]
+    except:
+        result["providers"]["ollama"] = []
+    
+    # Check z-ai availability
+    import os
+    zai_key = os.environ.get("ZAI_API_KEY")
+    if zai_key:
+        result["providers"]["z-ai"] = [
+            {"name": "z-ai:glm-4-plus", "display": "GLM-4 Plus"},
+            {"name": "z-ai:glm-4-flash", "display": "GLM-4 Flash"},
+            {"name": "z-ai:glm-5-flash", "display": "GLM-5 Flash"}
+        ]
+    else:
+        result["providers"]["z-ai"] = []
+    
+    # Check OpenAI/Codex availability
+    openai_key = os.environ.get("OPENAI_API_KEY")
+    if openai_key:
+        result["providers"]["codex"] = [
+            {"name": "codex:gpt-4o", "display": "GPT-4o"},
+            {"name": "codex:gpt-4o-mini", "display": "GPT-4o Mini"},
+            {"name": "codex:gpt-4-turbo", "display": "GPT-4 Turbo"}
+        ]
+    else:
+        result["providers"]["codex"] = []
+    
+    return result
 
 
 @app.post("/api/models")
@@ -127,6 +144,43 @@ async def set_model(model: str):
         return {"success": True, "model": model}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# Current provider tracking
+_current_provider: str = "ollama"
+
+
+def recreate_generator(model: str) -> LevelGenerator:
+    """Recreate the generator with a new model/provider."""
+    global _generator, _current_model, _current_provider
+    
+    # Parse model string (format: "provider:model")
+    if ":" in model:
+        provider, model_name = model.split(":", 1)
+        _current_provider = provider
+        _current_model = model_name
+    else:
+        # Default to ollama if just model name
+        provider = "ollama"
+        model_name = model
+        _current_provider = provider
+        _current_model = model_name
+    
+    try:
+        if provider == "ollama":
+            _generator = create_generator(client_type="ollama", model=model_name, base_url="http://192.168.68.76:11434")
+        elif provider == "z-ai":
+            _generator = create_generator(client_type="z-ai", model=model_name)
+        elif provider == "codex":
+            _generator = create_generator(client_type="codex", model=model_name)
+        else:
+            _generator = create_generator(client_type="ollama", model=model_name, base_url="http://192.168.68.76:11434")
+        
+        logger.info(f"Level generator recreated with {provider}:{model_name}")
+    except Exception as e:
+        logger.error(f"Failed to recreate generator: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to switch to model {model}")
+    return _generator
 
 
 @app.post("/api/generate")

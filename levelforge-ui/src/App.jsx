@@ -299,8 +299,8 @@ function App() {
     try {
       const res = await fetch('http://192.168.68.72:8000/api/models')
       const data = await res.json()
-      if (data.ollama) {
-        setAvailableModels(data.ollama)
+      if (data.providers) {
+        setAvailableModels(data.providers)
         setSelectedModel(data.current || '')
       }
     } catch (err) {
@@ -518,7 +518,7 @@ function App() {
         <section className="config-panel">
           <h2>Level Configuration</h2>
           
-          {availableModels.length > 0 && (
+          {availableModels && Object.keys(availableModels).length > 0 && (
             <div className="form-group">
               <label>AI Model</label>
               <select 
@@ -526,8 +526,12 @@ function App() {
                 onChange={(e) => handleModelChange(e.target.value)}
                 className="model-select"
               >
-                {availableModels.map(m => (
-                  <option key={m.name} value={m.name}>{m.name}</option>
+                {Object.entries(availableModels).map(([provider, models]) => (
+                  models.map(m => (
+                    <option key={m.name} value={m.name}>
+                      {provider.toUpperCase()}: {m.display || m.name}
+                    </option>
+                  ))
                 ))}
               </select>
             </div>
