@@ -52,7 +52,9 @@ Platform requirements:
 - Include a ground platform at y >= 450
 - Platforms should be reachable with standard jumping
 - Mix of easy (bottom) to hard (top) sections
-- Use reasonable jump distances (100-200px for medium difficulty)""",
+- Use reasonable jump distances (100-200px for medium difficulty)
+
+REQUIRED: Include at least 5-8 coins distributed throughout the level. Also include a player_spawn, a goal, and 2-4 enemies.""",
     
     user="""Create a {difficulty} difficulty platformer level with the following requirements:
 

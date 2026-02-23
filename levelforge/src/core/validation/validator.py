@@ -10,6 +10,11 @@ class SchemaValidator:
     """Validates level data against schemas."""
     
     @staticmethod
+    def validate_level_data(data: Dict[str, Any]) -> tuple[bool, List[str]]:
+        """Validate level data (alias for validate_level)."""
+        return SchemaValidator.validate_level(data)
+    
+    @staticmethod
     def validate_level(data: Dict[str, Any]) -> tuple[bool, List[str]]:
         """Validate level data and return errors if any."""
         errors = []

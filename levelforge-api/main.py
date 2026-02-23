@@ -24,7 +24,7 @@ app = FastAPI(
 # Enable CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"],
+    allow_origins=["http://localhost:5173", "http://localhost:5174", "http://localhost:3000", "http://192.168.68.72:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -38,7 +38,7 @@ def get_generator() -> LevelGenerator:
     global _generator
     if _generator is None:
         try:
-            _generator = create_generator()
+            _generator = create_generator(client_type="ollama", model="llama3.2:latest", base_url="http://192.168.68.76:11434")
             logger.info("Level generator initialized")
         except Exception as e:
             logger.error(f"Failed to initialize generator: {e}")
