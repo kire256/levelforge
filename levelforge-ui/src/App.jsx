@@ -1,6 +1,9 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import './App.css'
 
+// Use VITE_API_URL env var in production (e.g., https://api.example.com), defaults to localhost for development
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+
 // Genre options
 const GENRES = [
   { id: 'platformer', name: 'Platformer', icon: '🎮' },
@@ -272,7 +275,7 @@ function App() {
   
   const loadProjects = async () => {
     try {
-      const res = await fetch('http://192.168.68.72:8000/api/projects')
+      const res = await fetch(`${API_BASE}/api/projects`)
       const data = await res.json()
       setProjects(data)
     } catch (err) {
@@ -282,7 +285,7 @@ function App() {
   
   const loadLevels = async (projectId) => {
     try {
-      const res = await fetch(`http://192.168.68.72:8000/api/projects/${projectId}/levels`)
+      const res = await fetch(`${API_BASE}/api/projects/${projectId}/levels`)
       const data = await res.json()
       setLevels(data)
     } catch (err) {
@@ -295,7 +298,7 @@ function App() {
     if (!name) return
     
     try {
-      const res = await fetch(`http://192.168.68.72:8000/api/projects?name=${encodeURIComponent(name)}`, {
+      const res = await fetch(`${API_BASE}/api/projects?name=${encodeURIComponent(name)}`, {
         method: 'POST'
       })
       const data = await res.json()
@@ -318,7 +321,7 @@ function App() {
     if (!name) return
     
     try {
-      await fetch(`http://192.168.68.72:8000/api/projects/${currentProject.id}/levels`, {
+      await fetch(`${API_BASE}/api/projects/${currentProject.id}/levels`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -339,7 +342,7 @@ function App() {
   
   const handleLoadLevel = async (levelId) => {
     try {
-      const res = await fetch(`http://192.168.68.72:8000/api/levels/${levelId}`)
+      const res = await fetch(`${API_BASE}/api/levels/${levelId}`)
       const data = await res.json()
       setLevel(JSON.parse(data.level_data))
     } catch (err) {
@@ -355,7 +358,7 @@ function App() {
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 90000) // 90s timeout
       
-      const response = await fetch('http://192.168.68.72:8000/api/generate', {
+      const response = await fetch(`${API_BASE}/api/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -397,7 +400,7 @@ function App() {
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 60000) // 60s timeout
       
-      const response = await fetch('http://192.168.68.72:8000/api/refine', {
+      const response = await fetch(`${API_BASE}/api/refine`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

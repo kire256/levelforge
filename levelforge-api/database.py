@@ -45,8 +45,10 @@ def init_db():
 
 
 def get_connection():
-    """Get a database connection."""
-    return sqlite3.connect(DB_PATH)
+    """Get a database connection with foreign key enforcement enabled."""
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA foreign_keys = ON")
+    return conn
 
 
 # Project operations
