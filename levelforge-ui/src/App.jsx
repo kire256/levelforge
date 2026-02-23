@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import './App.css'
 
 // Genre options
@@ -47,11 +47,11 @@ function LevelPreview({ level, isFullscreen, onClose }) {
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
   const [canvasSize, setCanvasSize] = useState({ width: 600, height: 400 })
 
-  // Calculate level bounds
-  const levelBounds = {
+  // Calculate level bounds (memoized to avoid triggering useEffect re-runs)
+  const levelBounds = useMemo(() => ({
     width: Math.max(800, ...(level?.platforms?.map(p => p.x + p.width) || [800])),
     height: Math.max(600, ...(level?.platforms?.map(p => p.y + (p.height || 20)) || [600]))
-  }
+  }), [level])
 
   // Fit to screen on level change
   useEffect(() => {
@@ -220,6 +220,8 @@ function LevelPreview({ level, isFullscreen, onClose }) {
         ref={canvasRef}
         width={canvasSize.width}
         height={canvasSize.height}
+        role="img"
+        aria-label="Level preview canvas showing platforms and entities"
         style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
@@ -261,27 +263,29 @@ function App() {
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 90000) // 90s timeout
       
-      const response = await fetch('http://192.168.68.72:8000/api/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          genre,
-          difficulty,
-          level_type: levelType,
-          theme: theme || 'default',
-          requirements: requirements || 'Create an engaging level'
-        }),
-        signal: controller.signal
-      })
-      
-      clearTimeout(timeoutId)
-      
-      if (!response.ok) {
-        throw new Error('Generation failed')
+      try {
+        const response = await fetch('http://192.168.68.72:8000/api/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            genre,
+            difficulty,
+            level_type: levelType,
+            theme: theme || 'default',
+            requirements: requirements || 'Create an engaging level'
+          }),
+          signal: controller.signal
+        })
+        
+        if (!response.ok) {
+          throw new Error('Generation failed')
+        }
+        
+        const data = await response.json()
+        setLevel(data.level)
+      } finally {
+        clearTimeout(timeoutId)
       }
-      
-      const data = await response.json()
-      setLevel(data.level)
     } catch (err) {
       if (err.name === 'AbortError') {
         setError('Generation timed out - try again')
@@ -303,25 +307,27 @@ function App() {
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 60000) // 60s timeout
       
-      const response = await fetch('http://192.168.68.72:8000/api/refine', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          level_data: level,
-          modification: modification
-        }),
-        signal: controller.signal
-      })
-      
-      clearTimeout(timeoutId)
-      
-      if (!response.ok) {
-        throw new Error('Refinement failed')
+      try {
+        const response = await fetch('http://192.168.68.72:8000/api/refine', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            level_data: level,
+            modification: modification
+          }),
+          signal: controller.signal
+        })
+        
+        if (!response.ok) {
+          throw new Error('Refinement failed')
+        }
+        
+        const data = await response.json()
+        setLevel(data.level)
+        setModification('')
+      } finally {
+        clearTimeout(timeoutId)
       }
-      
-      const data = await response.json()
-      setLevel(data.level)
-      setModification('')
     } catch (err) {
       if (err.name === 'AbortError') {
         setError('Refinement timed out - try a simpler modification')
@@ -465,11 +471,10 @@ function App() {
               {level.theme && <span className="badge">{level.theme}</span>}
             </div>
 
-            {showPreview && (
+            {showPreview && !isFullscreen && (
               <LevelPreview 
                 level={level} 
-                isFullscreen={isFullscreen}
-                onClose={() => setIsFullscreen(false)}
+                isFullscreen={false}
               />
             )}
 
