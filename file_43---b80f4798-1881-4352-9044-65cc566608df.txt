@@ -1,0 +1,2 @@
+Which AI model are you using for generation?
+Is it possible to allow the user to choose which model they want to use?

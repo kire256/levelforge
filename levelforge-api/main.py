@@ -32,14 +32,16 @@ app.add_middleware(
 
 # Initialize generator
 _generator: Optional[LevelGenerator] = None
+_current_model: Optional[str] = "llama3.2:latest"
 
 def get_generator() -> LevelGenerator:
     """Get or create the level generator."""
-    global _generator
+    global _generator, _current_model
     if _generator is None:
         try:
-            _generator = create_generator(client_type="ollama", model="llama3.2:latest", base_url="http://192.168.68.76:11434")
-            logger.info("Level generator initialized")
+            _current_model = _current_model or "llama3.2:latest"
+            _generator = create_generator(client_type="ollama", model=_current_model, base_url="http://192.168.68.76:11434")
+            logger.info(f"Level generator initialized with model {_current_model}")
         except Exception as e:
             logger.error(f"Failed to initialize generator: {e}")
             raise HTTPException(status_code=500, detail="AI client not available")
@@ -54,6 +56,7 @@ class GenerationRequest(BaseModel):
     theme: str = "default"
     requirements: str = ""
     abilities: Optional[List[str]] = None
+    model: Optional[str] = None  # Optional model override
 
 
 class RefinementRequest(BaseModel):
@@ -78,7 +81,8 @@ async def health():
         return {
             "status": "healthy",
             "ai_available": client is not None,
-            "client_type": type(client).__name__ if client else None
+            "client_type": type(client).__name__ if client else None,
+            "current_model": _current_model
         }
     except Exception as e:
         return {
@@ -87,11 +91,107 @@ async def health():
         }
 
 
+@app.get("/api/models")
+async def get_models():
+    """Get available AI models from all providers."""
+    import requests
+    
+    result = {
+        "providers": {},
+        "current": _current_model,
+        "current_provider": _current_provider
+    }
+    
+    # Get Ollama models
+    try:
+        resp = requests.get("http://192.168.68.76:11434/api/tags", timeout=5)
+        models = resp.json().get("models", [])
+        result["providers"]["ollama"] = [{"name": f"ollama:{m['name']}", "display": m["name"], "size": m.get("size", 0)} for m in models]
+    except:
+        result["providers"]["ollama"] = []
+    
+    # Check z-ai availability
+    import os
+    zai_key = os.environ.get("ZAI_API_KEY")
+    if zai_key:
+        result["providers"]["z-ai"] = [
+            {"name": "z-ai:glm-4-plus", "display": "GLM-4 Plus"},
+            {"name": "z-ai:glm-4-flash", "display": "GLM-4 Flash"},
+            {"name": "z-ai:glm-5-flash", "display": "GLM-5 Flash"}
+        ]
+    else:
+        result["providers"]["z-ai"] = []
+    
+    # Check OpenAI/Codex availability
+    openai_key = os.environ.get("OPENAI_API_KEY")
+    if openai_key:
+        result["providers"]["codex"] = [
+            {"name": "codex:gpt-4o", "display": "GPT-4o"},
+            {"name": "codex:gpt-4o-mini", "display": "GPT-4o Mini"},
+            {"name": "codex:gpt-4-turbo", "display": "GPT-4 Turbo"}
+        ]
+    else:
+        result["providers"]["codex"] = []
+    
+    return result
+
+
+@app.post("/api/models")
+async def set_model(model: str):
+    """Set the active AI model."""
+    try:
+        recreate_generator(model)
+        return {"success": True, "model": model}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Current provider tracking
+_current_provider: str = "ollama"
+
+
+def recreate_generator(model: str) -> LevelGenerator:
+    """Recreate the generator with a new model/provider."""
+    global _generator, _current_model, _current_provider
+    
+    # Parse model string (format: "provider:model")
+    if ":" in model:
+        provider, model_name = model.split(":", 1)
+        _current_provider = provider
+        _current_model = model_name
+    else:
+        # Default to ollama if just model name
+        provider = "ollama"
+        model_name = model
+        _current_provider = provider
+        _current_model = model_name
+    
+    try:
+        if provider == "ollama":
+            _generator = create_generator(client_type="ollama", model=model_name, base_url="http://192.168.68.76:11434")
+        elif provider == "z-ai":
+            _generator = create_generator(client_type="z-ai", model=model_name)
+        elif provider == "codex":
+            _generator = create_generator(client_type="codex", model=model_name)
+        else:
+            _generator = create_generator(client_type="ollama", model=model_name, base_url="http://192.168.68.76:11434")
+        
+        logger.info(f"Level generator recreated with {provider}:{model_name}")
+    except Exception as e:
+        logger.error(f"Failed to recreate generator: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to switch to model {model}")
+    return _generator
+
+
 @app.post("/api/generate")
 async def generate_level(request: GenerationRequest):
     """Generate a new level."""
     try:
-        generator = get_generator()
+        # Switch model if requested
+        if request.model and request.model != _current_model:
+            generator = recreate_generator(request.model)
+        else:
+            generator = get_generator()
         
         logger.info(f"Generating {request.genre} level, difficulty: {request.difficulty}")
         
@@ -177,6 +277,99 @@ async def client_status():
             "available": False,
             "error": str(e)
         }
+
+
+# Project endpoints
+@app.post("/api/projects")
+async def create_project(name: str, description: str = None):
+    """Create a new project."""
+    from database import create_project
+    project_id = create_project(name, description)
+    return {"id": project_id, "name": name}
+
+
+@app.get("/api/projects")
+async def get_projects():
+    """Get all projects."""
+    from database import get_projects
+    projects = get_projects()
+    return [{"id": p[0], "name": p[1], "description": p[2], "created_at": p[3], "updated_at": p[4]} for p in projects]
+
+
+@app.get("/api/projects/{project_id}")
+async def get_project(project_id: int):
+    """Get a single project."""
+    from database import get_project
+    project = get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return project
+
+
+@app.delete("/api/projects/{project_id}")
+async def delete_project(project_id: int):
+    """Delete a project."""
+    from database import delete_project
+    success = delete_project(project_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return {"success": True}
+
+
+# Level endpoints
+@app.post("/api/projects/{project_id}/levels")
+async def create_level(project_id: int, name: str, genre: str, difficulty: str, 
+                       level_type: str, theme: str = None, level_data: str = None):
+    """Create a new level in a project."""
+    from database import create_level, get_project
+    
+    project = get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    level_id = create_level(project_id, name, genre, difficulty, level_type, theme, level_data or "{}")
+    return {"id": level_id, "name": name}
+
+
+@app.get("/api/projects/{project_id}/levels")
+async def get_levels(project_id: int):
+    """Get all levels in a project."""
+    from database import get_levels
+    levels = get_levels(project_id)
+    return [{
+        "id": l[0], "name": l[1], "genre": l[2], "difficulty": l[3],
+        "level_type": l[4], "theme": l[5], "version": l[6], "created_at": l[7], "updated_at": l[8]
+    } for l in levels]
+
+
+@app.get("/api/levels/{level_id}")
+async def get_level(level_id: int):
+    """Get a single level with full data."""
+    from database import get_level
+    level = get_level(level_id)
+    if not level:
+        raise HTTPException(status_code=404, detail="Level not found")
+    return level
+
+
+@app.put("/api/levels/{level_id}")
+async def update_level(level_id: int, level_data: str):
+    """Update a level's data."""
+    from database import update_level
+    success = update_level(level_id, level_data)
+    if not success:
+        raise HTTPException(status_code=404, detail="Level not found")
+    return {"success": True}
+
+
+@app.delete("/api/levels/{level_id}")
+async def delete_level(level_id: int):
+    """Delete a level."""
+    from database import delete_level
+    success = delete_level(level_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Level not found")
+    return {"success": True}
 
 
 if __name__ == "__main__":

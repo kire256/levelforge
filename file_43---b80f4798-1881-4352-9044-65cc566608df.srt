@@ -1,0 +1,8 @@
+1
+00:00:00,000 --> 00:00:05,000
+Which AI model are you using for generation?
+
+2
+00:00:05,000 --> 00:00:12,000
+Is it possible to allow the user to choose which model they want to use?
+

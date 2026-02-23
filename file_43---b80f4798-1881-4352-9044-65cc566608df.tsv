@@ -1,0 +1,3 @@
+start	end	text
+0	5000	Which AI model are you using for generation?
+5000	12000	Is it possible to allow the user to choose which model they want to use?

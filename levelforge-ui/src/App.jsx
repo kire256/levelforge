@@ -47,11 +47,11 @@ function LevelPreview({ level, isFullscreen, onClose }) {
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
   const [canvasSize, setCanvasSize] = useState({ width: 600, height: 400 })
 
-  // Calculate level bounds
-  const levelBounds = {
+  // Calculate level bounds (memoized to prevent re-render loops)
+  const levelBounds = useMemo(() => ({
     width: Math.max(800, ...(level?.platforms?.map(p => p.x + p.width) || [800])),
     height: Math.max(600, ...(level?.platforms?.map(p => p.y + (p.height || 20)) || [600]))
-  }
+  }), [level?.platforms])
 
   // Fit to screen on level change
   useEffect(() => {
@@ -232,6 +232,11 @@ function LevelPreview({ level, isFullscreen, onClose }) {
 }
 
 function App() {
+  // Project state
+  const [projects, setProjects] = useState([])
+  const [currentProject, setCurrentProject] = useState(null)
+  const [levels, setLevels] = useState([])
+  
   // Form state
   const [genre, setGenre] = useState('platformer')
   const [difficulty, setDifficulty] = useState('medium')
@@ -252,6 +257,126 @@ function App() {
   // Refinement state
   const [modification, setModification] = useState('')
   const [refining, setRefining] = useState(false)
+  
+  // Model state
+  const [availableModels, setAvailableModels] = useState([])
+  const [selectedModel, setSelectedModel] = useState('')
+  
+  // Load projects and models on mount
+  useEffect(() => {
+    loadProjects()
+    loadModels()
+  }, [])
+  
+  // Load levels when project changes
+  useEffect(() => {
+    if (currentProject) {
+      loadLevels(currentProject.id)
+    }
+  }, [currentProject])
+  
+  const loadProjects = async () => {
+    try {
+      const res = await fetch('http://192.168.68.72:8000/api/projects')
+      const data = await res.json()
+      setProjects(data)
+    } catch (err) {
+      console.error('Failed to load projects:', err)
+    }
+  }
+  
+  const loadLevels = async (projectId) => {
+    try {
+      const res = await fetch(`http://192.168.68.72:8000/api/projects/${projectId}/levels`)
+      const data = await res.json()
+      setLevels(data)
+    } catch (err) {
+      console.error('Failed to load levels:', err)
+    }
+  }
+  
+  const loadModels = async () => {
+    try {
+      const res = await fetch('http://192.168.68.72:8000/api/models')
+      const data = await res.json()
+      if (data.providers) {
+        setAvailableModels(data.providers)
+        setSelectedModel(data.current || '')
+      }
+    } catch (err) {
+      console.error('Failed to load models:', err)
+    }
+  }
+  
+  const handleModelChange = async (modelName) => {
+    try {
+      await fetch('http://192.168.68.72:8000/api/models', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: modelName })
+      })
+      setSelectedModel(modelName)
+    } catch (err) {
+      console.error('Failed to switch model:', err)
+    }
+  }
+  
+  const handleCreateProject = async () => {
+    const name = prompt('Project name:')
+    if (!name) return
+    
+    try {
+      const res = await fetch(`http://192.168.68.72:8000/api/projects?name=${encodeURIComponent(name)}`, {
+        method: 'POST'
+      })
+      const data = await res.json()
+      await loadProjects()
+      setCurrentProject({ id: data.id, name: data.name })
+    } catch (err) {
+      setError('Failed to create project')
+    }
+  }
+  
+  const handleSelectProject = (project) => {
+    setCurrentProject(project)
+    setLevel(null)
+  }
+  
+  const handleSaveLevel = async () => {
+    if (!currentProject || !level) return
+    
+    const name = prompt('Level name:', `Level ${levels.length + 1}`)
+    if (!name) return
+    
+    try {
+      await fetch(`http://192.168.68.72:8000/api/projects/${currentProject.id}/levels`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          genre: level.genre || genre,
+          difficulty: level.difficulty || difficulty,
+          level_type: level.type || levelType,
+          theme: level.theme || theme,
+          level_data: JSON.stringify(level)
+        })
+      })
+      await loadLevels(currentProject.id)
+      alert('Level saved!')
+    } catch (err) {
+      setError('Failed to save level')
+    }
+  }
+  
+  const handleLoadLevel = async (levelId) => {
+    try {
+      const res = await fetch(`http://192.168.68.72:8000/api/levels/${levelId}`)
+      const data = await res.json()
+      setLevel(JSON.parse(data.level_data))
+    } catch (err) {
+      setError('Failed to load level')
+    }
+  }
 
   const handleGenerate = async () => {
     setGenerating(true)
@@ -269,12 +394,11 @@ function App() {
           difficulty,
           level_type: levelType,
           theme: theme || 'default',
-          requirements: requirements || 'Create an engaging level'
+          requirements: requirements || 'Create an engaging level',
+          model: selectedModel || undefined
         }),
         signal: controller.signal
       })
-      
-      clearTimeout(timeoutId)
       
       if (!response.ok) {
         throw new Error('Generation failed')
@@ -289,6 +413,7 @@ function App() {
         setError(err.message || 'Failed to generate level')
       }
     } finally {
+      clearTimeout(timeoutId)
       setGenerating(false)
     }
   }
@@ -352,8 +477,65 @@ function App() {
       </header>
 
       <main className="main">
+        {/* Project Management */}
+        <section className="project-panel">
+          <div className="project-header">
+            <h3>📁 Projects</h3>
+            <button className="new-project-btn" onClick={handleCreateProject}>+ New Project</button>
+          </div>
+          
+          {projects.length > 0 && (
+            <div className="project-list">
+              {projects.map(p => (
+                <button
+                  key={p.id}
+                  className={`project-item ${currentProject?.id === p.id ? 'active' : ''}`}
+                  onClick={() => handleSelectProject(p)}
+                >
+                  {p.name}
+                </button>
+              ))}
+            </div>
+          )}
+          
+          {currentProject && (
+            <div className="level-list">
+              <h3>Levels in {currentProject.name}</h3>
+              {levels.length === 0 ? (
+                <p className="no-levels">No levels yet. Generate one below!</p>
+              ) : (
+                levels.map(l => (
+                  <div key={l.id} className="level-item" onClick={() => handleLoadLevel(l.id)}>
+                    <span className="level-name">{l.name}</span>
+                    <span className="level-info">{l.genre} • {l.difficulty} • v{l.version}</span>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </section>
+
         <section className="config-panel">
           <h2>Level Configuration</h2>
+          
+          {availableModels && Object.keys(availableModels).length > 0 && (
+            <div className="form-group">
+              <label>AI Model</label>
+              <select 
+                value={selectedModel} 
+                onChange={(e) => handleModelChange(e.target.value)}
+                className="model-select"
+              >
+                {Object.entries(availableModels).map(([provider, models]) => (
+                  models.map(m => (
+                    <option key={m.name} value={m.name}>
+                      {provider.toUpperCase()}: {m.display || m.name}
+                    </option>
+                  ))
+                ))}
+              </select>
+            </div>
+          )}
           
           <div className="form-group">
             <label>Genre</label>
@@ -456,6 +638,9 @@ function App() {
                   {showJson ? '📄 Hide JSON' : '📄 Show JSON'}
                 </button>
                 <button onClick={handleExportJson}>💾 Export JSON</button>
+                {currentProject && (
+                  <button onClick={handleSaveLevel}>💿 Save to Project</button>
+                )}
               </div>
             </div>
 

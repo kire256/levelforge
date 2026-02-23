@@ -1,0 +1,4 @@
+start	end	text
+0	2480	Yes, that sounds like a good idea.
+2480	11880	I was also thinking that it might be good if we offered the ability to use other AI models,
+11880	18000	like OpenAI or Gemini, the user could provide an API key.
