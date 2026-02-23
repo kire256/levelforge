@@ -1,0 +1,3 @@
+Yes, that sounds like a good idea.
+I was also thinking that it might be good if we offered the ability to use other AI models,
+like OpenAI or Gemini, the user could provide an API key.

@@ -32,17 +32,32 @@ app.add_middleware(
 
 # Initialize generator
 _generator: Optional[LevelGenerator] = None
+_current_model: Optional[str] = "llama3.2:latest"
 
 def get_generator() -> LevelGenerator:
     """Get or create the level generator."""
-    global _generator
+    global _generator, _current_model
     if _generator is None:
         try:
-            _generator = create_generator(client_type="ollama", model="llama3.2:latest", base_url="http://192.168.68.76:11434")
-            logger.info("Level generator initialized")
+            _current_model = _current_model or "llama3.2:latest"
+            _generator = create_generator(client_type="ollama", model=_current_model, base_url="http://192.168.68.76:11434")
+            logger.info(f"Level generator initialized with model {_current_model}")
         except Exception as e:
             logger.error(f"Failed to initialize generator: {e}")
             raise HTTPException(status_code=500, detail="AI client not available")
+    return _generator
+
+
+def recreate_generator(model: str) -> LevelGenerator:
+    """Recreate the generator with a new model."""
+    global _generator, _current_model
+    _current_model = model
+    try:
+        _generator = create_generator(client_type="ollama", model=model, base_url="http://192.168.68.76:11434")
+        logger.info(f"Level generator recreated with model {model}")
+    except Exception as e:
+        logger.error(f"Failed to recreate generator: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to switch to model {model}")
     return _generator
 
 
@@ -54,6 +69,7 @@ class GenerationRequest(BaseModel):
     theme: str = "default"
     requirements: str = ""
     abilities: Optional[List[str]] = None
+    model: Optional[str] = None  # Optional model override
 
 
 class RefinementRequest(BaseModel):
@@ -78,7 +94,8 @@ async def health():
         return {
             "status": "healthy",
             "ai_available": client is not None,
-            "client_type": type(client).__name__ if client else None
+            "client_type": type(client).__name__ if client else None,
+            "current_model": _current_model
         }
     except Exception as e:
         return {
@@ -87,11 +104,40 @@ async def health():
         }
 
 
+@app.get("/api/models")
+async def get_models():
+    """Get available AI models from Ollama."""
+    try:
+        import requests
+        resp = requests.get("http://192.168.68.76:11434/api/tags", timeout=5)
+        models = resp.json().get("models", [])
+        return {
+            "ollama": [{"name": m["name"], "size": m.get("size", 0)} for m in models],
+            "current": _current_model
+        }
+    except Exception as e:
+        return {"error": str(e), "ollama": [], "current": _current_model}
+
+
+@app.post("/api/models")
+async def set_model(model: str):
+    """Set the active AI model."""
+    try:
+        recreate_generator(model)
+        return {"success": True, "model": model}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/generate")
 async def generate_level(request: GenerationRequest):
     """Generate a new level."""
     try:
-        generator = get_generator()
+        # Switch model if requested
+        if request.model and request.model != _current_model:
+            generator = recreate_generator(request.model)
+        else:
+            generator = get_generator()
         
         logger.info(f"Generating {request.genre} level, difficulty: {request.difficulty}")
         

@@ -47,11 +47,11 @@ function LevelPreview({ level, isFullscreen, onClose }) {
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
   const [canvasSize, setCanvasSize] = useState({ width: 600, height: 400 })
 
-  // Calculate level bounds
-  const levelBounds = {
+  // Calculate level bounds (memoized to prevent re-render loops)
+  const levelBounds = useMemo(() => ({
     width: Math.max(800, ...(level?.platforms?.map(p => p.x + p.width) || [800])),
     height: Math.max(600, ...(level?.platforms?.map(p => p.y + (p.height || 20)) || [600]))
-  }
+  }), [level?.platforms])
 
   // Fit to screen on level change
   useEffect(() => {
@@ -258,9 +258,14 @@ function App() {
   const [modification, setModification] = useState('')
   const [refining, setRefining] = useState(false)
   
-  // Load projects on mount
+  // Model state
+  const [availableModels, setAvailableModels] = useState([])
+  const [selectedModel, setSelectedModel] = useState('')
+  
+  // Load projects and models on mount
   useEffect(() => {
     loadProjects()
+    loadModels()
   }, [])
   
   // Load levels when project changes
@@ -287,6 +292,32 @@ function App() {
       setLevels(data)
     } catch (err) {
       console.error('Failed to load levels:', err)
+    }
+  }
+  
+  const loadModels = async () => {
+    try {
+      const res = await fetch('http://192.168.68.72:8000/api/models')
+      const data = await res.json()
+      if (data.ollama) {
+        setAvailableModels(data.ollama)
+        setSelectedModel(data.current || '')
+      }
+    } catch (err) {
+      console.error('Failed to load models:', err)
+    }
+  }
+  
+  const handleModelChange = async (modelName) => {
+    try {
+      await fetch('http://192.168.68.72:8000/api/models', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: modelName })
+      })
+      setSelectedModel(modelName)
+    } catch (err) {
+      console.error('Failed to switch model:', err)
     }
   }
   
@@ -363,12 +394,11 @@ function App() {
           difficulty,
           level_type: levelType,
           theme: theme || 'default',
-          requirements: requirements || 'Create an engaging level'
+          requirements: requirements || 'Create an engaging level',
+          model: selectedModel || undefined
         }),
         signal: controller.signal
       })
-      
-      clearTimeout(timeoutId)
       
       if (!response.ok) {
         throw new Error('Generation failed')
@@ -383,6 +413,7 @@ function App() {
         setError(err.message || 'Failed to generate level')
       }
     } finally {
+      clearTimeout(timeoutId)
       setGenerating(false)
     }
   }
@@ -486,6 +517,21 @@ function App() {
 
         <section className="config-panel">
           <h2>Level Configuration</h2>
+          
+          {availableModels.length > 0 && (
+            <div className="form-group">
+              <label>AI Model</label>
+              <select 
+                value={selectedModel} 
+                onChange={(e) => handleModelChange(e.target.value)}
+                className="model-select"
+              >
+                {availableModels.map(m => (
+                  <option key={m.name} value={m.name}>{m.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
           
           <div className="form-group">
             <label>Genre</label>

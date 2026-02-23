@@ -1,0 +1,4 @@
+Yeah, let's think about how we want to approach this. I was thinking that we could have a system where you
+Create new projects save them and are able to restore them and
+Those projects would be stored in the database
+What do you think?
