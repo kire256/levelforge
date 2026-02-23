@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import './App.css'
 
 // Genre options
@@ -48,10 +48,10 @@ function LevelPreview({ level, isFullscreen, onClose }) {
   const [canvasSize, setCanvasSize] = useState({ width: 600, height: 400 })
 
   // Calculate level bounds
-  const levelBounds = {
+  const levelBounds = useMemo(() => ({
     width: Math.max(800, ...(level?.platforms?.map(p => p.x + p.width) || [800])),
     height: Math.max(600, ...(level?.platforms?.map(p => p.y + (p.height || 20)) || [600]))
-  }
+  }), [level])
 
   // Fit to screen on level change
   useEffect(() => {
@@ -351,10 +351,10 @@ function App() {
     setGenerating(true)
     setError(null)
     
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 90000) // 90s timeout
+    
     try {
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 90000) // 90s timeout
-      
       const response = await fetch('http://192.168.68.72:8000/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -367,8 +367,6 @@ function App() {
         }),
         signal: controller.signal
       })
-      
-      clearTimeout(timeoutId)
       
       if (!response.ok) {
         throw new Error('Generation failed')
@@ -383,6 +381,7 @@ function App() {
         setError(err.message || 'Failed to generate level')
       }
     } finally {
+      clearTimeout(timeoutId)
       setGenerating(false)
     }
   }
@@ -393,10 +392,10 @@ function App() {
     setRefining(true)
     setError(null)
     
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 60000) // 60s timeout
+    
     try {
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 60000) // 60s timeout
-      
       const response = await fetch('http://192.168.68.72:8000/api/refine', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -406,8 +405,6 @@ function App() {
         }),
         signal: controller.signal
       })
-      
-      clearTimeout(timeoutId)
       
       if (!response.ok) {
         throw new Error('Refinement failed')
@@ -423,6 +420,7 @@ function App() {
         setError(err.message || 'Failed to refine level')
       }
     } finally {
+      clearTimeout(timeoutId)
       setRefining(false)
     }
   }

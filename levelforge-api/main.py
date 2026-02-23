@@ -61,6 +61,15 @@ class RefinementRequest(BaseModel):
     modification: str
 
 
+class CreateLevelRequest(BaseModel):
+    name: str
+    genre: str
+    difficulty: str
+    level_type: str
+    theme: Optional[str] = None
+    level_data: Optional[str] = None
+
+
 @app.get("/")
 async def root():
     return {
@@ -218,8 +227,7 @@ async def delete_project(project_id: int):
 
 # Level endpoints
 @app.post("/api/projects/{project_id}/levels")
-async def create_level(project_id: int, name: str, genre: str, difficulty: str, 
-                       level_type: str, theme: str = None, level_data: str = None):
+async def create_level(project_id: int, request: CreateLevelRequest):
     """Create a new level in a project."""
     from database import create_level, get_project
     
@@ -227,8 +235,8 @@ async def create_level(project_id: int, name: str, genre: str, difficulty: str,
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     
-    level_id = create_level(project_id, name, genre, difficulty, level_type, theme, level_data or "{}")
-    return {"id": level_id, "name": name}
+    level_id = create_level(project_id, request.name, request.genre, request.difficulty, request.level_type, request.theme, request.level_data or "{}")
+    return {"id": level_id, "name": request.name}
 
 
 @app.get("/api/projects/{project_id}/levels")
