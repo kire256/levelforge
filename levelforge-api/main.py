@@ -179,6 +179,99 @@ async def client_status():
         }
 
 
+# Project endpoints
+@app.post("/api/projects")
+async def create_project(name: str, description: str = None):
+    """Create a new project."""
+    from database import create_project
+    project_id = create_project(name, description)
+    return {"id": project_id, "name": name}
+
+
+@app.get("/api/projects")
+async def get_projects():
+    """Get all projects."""
+    from database import get_projects
+    projects = get_projects()
+    return [{"id": p[0], "name": p[1], "description": p[2], "created_at": p[3], "updated_at": p[4]} for p in projects]
+
+
+@app.get("/api/projects/{project_id}")
+async def get_project(project_id: int):
+    """Get a single project."""
+    from database import get_project
+    project = get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return project
+
+
+@app.delete("/api/projects/{project_id}")
+async def delete_project(project_id: int):
+    """Delete a project."""
+    from database import delete_project
+    success = delete_project(project_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return {"success": True}
+
+
+# Level endpoints
+@app.post("/api/projects/{project_id}/levels")
+async def create_level(project_id: int, name: str, genre: str, difficulty: str, 
+                       level_type: str, theme: str = None, level_data: str = None):
+    """Create a new level in a project."""
+    from database import create_level, get_project
+    
+    project = get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    level_id = create_level(project_id, name, genre, difficulty, level_type, theme, level_data or "{}")
+    return {"id": level_id, "name": name}
+
+
+@app.get("/api/projects/{project_id}/levels")
+async def get_levels(project_id: int):
+    """Get all levels in a project."""
+    from database import get_levels
+    levels = get_levels(project_id)
+    return [{
+        "id": l[0], "name": l[1], "genre": l[2], "difficulty": l[3],
+        "level_type": l[4], "theme": l[5], "version": l[6], "created_at": l[7], "updated_at": l[8]
+    } for l in levels]
+
+
+@app.get("/api/levels/{level_id}")
+async def get_level(level_id: int):
+    """Get a single level with full data."""
+    from database import get_level
+    level = get_level(level_id)
+    if not level:
+        raise HTTPException(status_code=404, detail="Level not found")
+    return level
+
+
+@app.put("/api/levels/{level_id}")
+async def update_level(level_id: int, level_data: str):
+    """Update a level's data."""
+    from database import update_level
+    success = update_level(level_id, level_data)
+    if not success:
+        raise HTTPException(status_code=404, detail="Level not found")
+    return {"success": True}
+
+
+@app.delete("/api/levels/{level_id}")
+async def delete_level(level_id: int):
+    """Delete a level."""
+    from database import delete_level
+    success = delete_level(level_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Level not found")
+    return {"success": True}
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
