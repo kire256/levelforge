@@ -4,10 +4,13 @@ LevelForge FastAPI backend.
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional, List
 import json
 import logging
+import asyncio
+import sse_starlette.sse as sse
 
 from levelforge.src.core.generation.generator import LevelGenerator, create_generator
 from levelforge.src.ai.clients.llm_client import LLMFactory
@@ -24,7 +27,7 @@ app = FastAPI(
 # Enable CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:5174", "http://localhost:3000", "http://192.168.68.72:5173"],
+    allow_origins=["http://localhost:5173", "http://localhost:5174", "http://localhost:4173", "http://localhost:3000", "http://192.168.68.72:5173", "http://192.168.68.72:4173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -57,11 +60,17 @@ class GenerationRequest(BaseModel):
     requirements: str = ""
     abilities: Optional[List[str]] = None
     model: Optional[str] = None  # Optional model override
+    project_id: Optional[int] = None  # For custom entity types
 
 
 class RefinementRequest(BaseModel):
     level_data: dict
     modification: str
+    model: Optional[str] = None
+
+
+class ModelRequest(BaseModel):
+    model: str
 
 
 @app.get("/")
@@ -115,9 +124,10 @@ async def get_models():
     zai_key = os.environ.get("ZAI_API_KEY")
     if zai_key:
         result["providers"]["z-ai"] = [
-            {"name": "z-ai:glm-4-plus", "display": "GLM-4 Plus"},
-            {"name": "z-ai:glm-4-flash", "display": "GLM-4 Flash"},
-            {"name": "z-ai:glm-5-flash", "display": "GLM-5 Flash"}
+            {"name": "z-ai:glm-5", "display": "GLM-5"},
+            {"name": "z-ai:glm-4.7", "display": "GLM-4.7"},
+            {"name": "z-ai:glm-4.6", "display": "GLM-4.6"},
+            {"name": "z-ai:glm-4.5", "display": "GLM-4.5"}
         ]
     else:
         result["providers"]["z-ai"] = []
@@ -137,11 +147,11 @@ async def get_models():
 
 
 @app.post("/api/models")
-async def set_model(model: str):
+async def set_model(request: ModelRequest):
     """Set the active AI model."""
     try:
-        recreate_generator(model)
-        return {"success": True, "model": model}
+        recreate_generator(request.model)
+        return {"success": True, "model": request.model}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -170,6 +180,7 @@ def recreate_generator(model: str) -> LevelGenerator:
         if provider == "ollama":
             _generator = create_generator(client_type="ollama", model=model_name, base_url="http://192.168.68.76:11434")
         elif provider == "z-ai":
+            # Use the model name directly for Z-AI
             _generator = create_generator(client_type="z-ai", model=model_name)
         elif provider == "codex":
             _generator = create_generator(client_type="codex", model=model_name)
@@ -193,7 +204,36 @@ async def generate_level(request: GenerationRequest):
         else:
             generator = get_generator()
         
+        # Fetch custom entity types if project_id provided
+        custom_entities_info = ""
+        if request.project_id:
+            import database as db
+            entity_types = db.get_entity_types(request.project_id)
+            if entity_types:
+                custom_entities_info = "\n\nCustom entity types for this project:\n"
+                for et in entity_types:
+                    rules = f" - Placement: {et['placement_rules']}" if et.get('placement_rules') else ""
+                    behavior = f" - Behavior: {et['behavior']}" if et.get('behavior') else ""
+                    
+                    # Parse and include metadata fields
+                    metadata_info = ""
+                    try:
+                        fields = json.loads(et.get('metadata_fields', '[]'))
+                        if fields:
+                            metadata_info = " - Metadata fields:"
+                            for field in fields:
+                                metadata_info += f"\n    * {field.get('name', 'unknown')} ({field.get('type', 'text')}): {field.get('description', '')} [default: {field.get('default', '')}]"
+                    except:
+                        pass
+                    
+                    custom_entities_info += f"- {et['emoji']} {et['name']} ({et['collision_type']}): {et.get('description', '')}{rules}{behavior}{metadata_info}\n"
+        
         logger.info(f"Generating {request.genre} level, difficulty: {request.difficulty}")
+        
+        # Add custom entities to requirements
+        full_requirements = request.requirements or "Create an engaging level"
+        if custom_entities_info:
+            full_requirements += custom_entities_info
         
         # Generate based on genre
         if request.genre == "platformer":
@@ -206,18 +246,18 @@ async def generate_level(request: GenerationRequest):
             else:
                 result = generator.generate_platformer(
                     difficulty=request.difficulty,
-                    requirements=request.requirements or "Create an engaging level",
+                    requirements=full_requirements,
                     theme=request.theme
                 )
         elif request.genre == "puzzle":
             result = generator.generate_puzzle(
                 difficulty=request.difficulty,
-                requirements=request.requirements
+                requirements=full_requirements
             )
         elif request.genre == "shooter":
             result = generator.generate_shooter(
                 difficulty=request.difficulty,
-                requirements=request.requirements
+                requirements=full_requirements
             )
         else:
             raise HTTPException(status_code=400, detail=f"Unsupported genre: {request.genre}")
@@ -234,7 +274,226 @@ async def generate_level(request: GenerationRequest):
         raise
     except Exception as e:
         logger.error(f"Generation error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        error_str = str(e)
+        # Translate common Chinese error messages
+        if "令牌已过期" in error_str or "401" in error_str:
+            error_detail = f"API authentication failed. Please check your {_current_provider} API key."
+        elif "rate limit" in error_str.lower():
+            error_detail = f"Rate limit exceeded. Please wait and try again."
+        else:
+            error_detail = f"Generation failed using {_current_provider}:{_current_model} - {error_str}"
+        raise HTTPException(status_code=500, detail=error_detail)
+
+
+def is_rate_limit_error(error_str: str) -> bool:
+    """Check if an error is a rate limit or quota error."""
+    error_lower = error_str.lower()
+    return any(x in error_lower for x in [
+        "rate limit", "quota", "429", "too many requests", 
+        "limit exceeded", "requests per", "usage limit"
+    ])
+
+
+def generate_with_fallback(generator, genre, level_type, difficulty, full_requirements, theme, abilities):
+    """Try generation with current model, fall back to Ollama on rate limits."""
+    global _generator, _current_model, _current_provider
+    
+    try:
+        # Try primary model
+        if genre == "platformer":
+            if level_type == "metroidvania":
+                return generator.generate_metroidvania(
+                    difficulty=difficulty,
+                    abilities=abilities or ["double_jump", "dash"],
+                    theme=theme
+                )
+            else:
+                return generator.generate_platformer(
+                    difficulty=difficulty,
+                    requirements=full_requirements,
+                    theme=theme
+                )
+        elif genre == "puzzle":
+            return generator.generate_puzzle(
+                difficulty=difficulty,
+                requirements=full_requirements
+            )
+        elif genre == "shooter":
+            return generator.generate_shooter(
+                difficulty=difficulty,
+                requirements=full_requirements
+            )
+    except Exception as e:
+        error_str = str(e)
+        # If rate limit, try fallback to Ollama
+        if is_rate_limit_error(error_str) and _current_provider != "ollama":
+            logger.warning(f"Rate limit hit, falling back to Ollama: {error_str}")
+            try:
+                fallback_generator = create_generator(
+                    client_type="ollama", 
+                    model="llama3.2:latest", 
+                    base_url="http://192.168.68.76:11434"
+                )
+                if genre == "platformer":
+                    if level_type == "metroidvania":
+                        return fallback_generator.generate_metroidvania(
+                            difficulty=difficulty,
+                            abilities=abilities or ["double_jump", "dash"],
+                            theme=theme
+                        )
+                    else:
+                        return fallback_generator.generate_platformer(
+                            difficulty=difficulty,
+                            requirements=full_requirements,
+                            theme=theme
+                        )
+                elif genre == "puzzle":
+                    return fallback_generator.generate_puzzle(
+                        difficulty=difficulty,
+                        requirements=full_requirements
+                    )
+                elif genre == "shooter":
+                    return fallback_generator.generate_shooter(
+                        difficulty=difficulty,
+                        requirements=full_requirements
+                    )
+            except Exception as fallback_error:
+                logger.error(f"Fallback also failed: {fallback_error}")
+                raise fallback_error
+        else:
+            raise e
+
+
+async def generate_level_events(request: GenerationRequest):
+    """Generate a level with SSE progress events."""
+    try:
+        # Switch model if requested
+        if request.model and request.model != _current_model:
+            generator = recreate_generator(request.model)
+        else:
+            generator = get_generator()
+        
+        # Fetch custom entity types if project_id provided
+        custom_entities_info = ""
+        if request.project_id:
+            import database as db
+            entity_types = db.get_entity_types(request.project_id)
+            if entity_types:
+                custom_entities_info = "\n\nCustom entity types for this project:\n"
+                for et in entity_types:
+                    rules = f" - Placement: {et['placement_rules']}" if et.get('placement_rules') else ""
+                    behavior = f" - Behavior: {et['behavior']}" if et.get('behavior') else ""
+                    
+                    # Parse and include metadata fields
+                    metadata_info = ""
+                    try:
+                        fields = json.loads(et.get('metadata_fields', '[]'))
+                        if fields:
+                            metadata_info = " - Metadata fields:"
+                            for field in fields:
+                                metadata_info += f"\n    * {field.get('name', 'unknown')} ({field.get('type', 'text')}): {field.get('description', '')} [default: {field.get('default', '')}]"
+                    except:
+                        pass
+                    
+                    custom_entities_info += f"- {et['emoji']} {et['name']} ({et['collision_type']}): {et.get('description', '')}{rules}{behavior}{metadata_info}\n"
+        
+        # Send "preparing" step
+        yield json.dumps({"event": "progress", "step": "preparing", "message": "Preparing prompt...", "progress": 10})
+        await asyncio.sleep(0.1)
+        
+        # Add custom entities to requirements
+        full_requirements = request.requirements or "Create an engaging level"
+        if custom_entities_info:
+            full_requirements += custom_entities_info
+        
+        # Check for supported genre
+        if request.genre not in ["platformer", "puzzle", "shooter"]:
+            yield json.dumps({"event": "error", "message": f"Unsupported genre: {request.genre}"})
+            return
+        
+        # Send "generating" step
+        yield json.dumps({"event": "progress", "step": "generating", "message": f"AI is generating level ({_current_provider}:{_current_model})...", "progress": 40})
+        await asyncio.sleep(0.1)
+        
+        # Generate with automatic fallback to Ollama
+        try:
+            result = generate_with_fallback(
+                generator=generator,
+                genre=request.genre,
+                level_type=request.level_type,
+                difficulty=request.difficulty,
+                full_requirements=full_requirements,
+                theme=request.theme,
+                abilities=request.abilities
+            )
+        except Exception as gen_error:
+            if is_rate_limit_error(str(gen_error)):
+                yield json.dumps({"event": "progress", "step": "fallback", "message": "Rate limit hit, falling back to Ollama...", "progress": 45})
+                await asyncio.sleep(0.1)
+                # Retry the whole generation with Ollama
+                generator = create_generator(client_type="ollama", model="llama3.2:latest", base_url="http://192.168.68.76:11434")
+                result = generate_with_fallback(
+                    generator=generator,
+                    genre=request.genre,
+                    level_type=request.level_type,
+                    difficulty=request.difficulty,
+                    full_requirements=full_requirements,
+                    theme=request.theme,
+                    abilities=request.abilities
+                )
+            else:
+                raise gen_error
+        
+        # Send "parsing" step  
+        yield json.dumps({"event": "progress", "step": "parsing", "message": "Parsing AI response...", "progress": 70})
+        await asyncio.sleep(0.1)
+        
+        # Send "validating" step
+        yield json.dumps({"event": "progress", "step": "validating", "message": "Validating level data...", "progress": 85})
+        await asyncio.sleep(0.1)
+        
+        if result.success:
+            yield json.dumps({"event": "progress", "step": "complete", "message": "Level generated successfully!", "progress": 100})
+            await asyncio.sleep(0.1)
+            
+            yield json.dumps({
+                "event": "result",
+                "success": True,
+                "level": result.level.model_dump()
+            })
+        else:
+            yield json.dumps({
+                "event": "error",
+                "message": result.error or "Generation failed"
+            })
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Generation error: {e}")
+        error_str = str(e)
+        if "令牌已过期" in error_str or "401" in error_str:
+            error_detail = f"API authentication failed. Please check your {_current_provider} API key."
+        elif "rate limit" in error_str.lower():
+            error_detail = f"Rate limit exceeded. Please wait and try again."
+        else:
+            error_detail = f"Generation failed using {_current_provider}:{_current_model} - {error_str}"
+        
+        yield json.dumps({"event": "error", "message": error_detail})
+
+
+@app.post("/api/generate/stream")
+async def generate_level_stream(request: GenerationRequest):
+    """Generate a new level with streaming progress events."""
+    return StreamingResponse(
+        generate_level_events(request),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        }
+    )
 
 
 @app.post("/api/refine")
@@ -260,7 +519,14 @@ async def refine_level(request: RefinementRequest):
         raise
     except Exception as e:
         logger.error(f"Refinement error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        error_str = str(e)
+        if "令牌已过期" in error_str or "401" in error_str:
+            error_detail = f"API authentication failed. Please check your {_current_provider} API key."
+        elif "rate limit" in error_str.lower():
+            error_detail = f"Rate limit exceeded. Please wait and try again."
+        else:
+            error_detail = f"Refinement failed using {_current_provider}:{_current_model} - {error_str}"
+        raise HTTPException(status_code=500, detail=error_detail)
 
 
 @app.get("/api/client-status")
@@ -369,6 +635,99 @@ async def delete_level(level_id: int):
     success = delete_level(level_id)
     if not success:
         raise HTTPException(status_code=404, detail="Level not found")
+    return {"success": True}
+
+
+# Entity Type endpoints
+class CreateEntityTypeRequest(BaseModel):
+    name: str
+    emoji: str = '📦'
+    color: str = '#6366f1'
+    description: str = None
+    placement_rules: str = None
+    behavior: str = None
+    collision_type: str = 'neutral'
+    metadata_fields: str = '[]'  # JSON array of field definitions
+
+
+class UpdateEntityTypeRequest(BaseModel):
+    name: str = None
+    emoji: str = None
+    color: str = None
+    description: str = None
+    placement_rules: str = None
+    behavior: str = None
+    collision_type: str = None
+    metadata_fields: str = None
+
+
+@app.post("/api/projects/{project_id}/entity-types")
+async def create_entity_type(project_id: int, request: CreateEntityTypeRequest):
+    """Create a new entity type for a project."""
+    import database as db
+    
+    project = db.get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    entity_type_id = db.create_entity_type(
+        project_id=project_id,
+        name=request.name,
+        emoji=request.emoji,
+        color=request.color,
+        description=request.description,
+        placement_rules=request.placement_rules,
+        behavior=request.behavior,
+        collision_type=request.collision_type,
+        metadata_fields=request.metadata_fields
+    )
+    return {"id": entity_type_id, "name": request.name}
+
+
+@app.get("/api/projects/{project_id}/entity-types")
+async def get_entity_types(project_id: int):
+    """Get all entity types for a project."""
+    import database as db
+    return db.get_entity_types(project_id)
+
+
+@app.get("/api/entity-types/{entity_type_id}")
+async def get_entity_type(entity_type_id: int):
+    """Get a single entity type."""
+    import database as db
+    entity_type = db.get_entity_type(entity_type_id)
+    if not entity_type:
+        raise HTTPException(status_code=404, detail="Entity type not found")
+    return entity_type
+
+
+@app.put("/api/entity-types/{entity_type_id}")
+async def update_entity_type(entity_type_id: int, request: UpdateEntityTypeRequest):
+    """Update an entity type."""
+    import database as db
+    success = db.update_entity_type(
+        entity_type_id,
+        name=request.name,
+        emoji=request.emoji,
+        color=request.color,
+        description=request.description,
+        placement_rules=request.placement_rules,
+        behavior=request.behavior,
+        collision_type=request.collision_type,
+        metadata_fields=request.metadata_fields
+    )
+    if not success:
+        raise HTTPException(status_code=404, detail="Entity type not found")
+    return {"success": True}
+
+
+@app.delete("/api/entity-types/{entity_type_id}")
+async def delete_entity_type(entity_type_id: int):
+    """Delete an entity type."""
+    import database as db
+    success = db.delete_entity_type(entity_type_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Entity type not found")
     return {"success": True}
 
 

@@ -249,6 +249,10 @@ function App() {
   const [level, setLevel] = useState(null)
   const [error, setError] = useState(null)
   
+  // Progress state
+  const [progress, setProgress] = useState(0)
+  const [progressMessage, setProgressMessage] = useState('')
+  
   // Preview state
   const [showPreview, setShowPreview] = useState(true)
   const [showJson, setShowJson] = useState(false)
@@ -262,6 +266,31 @@ function App() {
   const [availableModels, setAvailableModels] = useState([])
   const [selectedModel, setSelectedModel] = useState('')
   
+  // Entity Types state
+  const [entityTypes, setEntityTypes] = useState([])
+  const [showEntityTypesPanel, setShowEntityTypesPanel] = useState(false)
+  const [showEntityTypeForm, setShowEntityTypeForm] = useState(false)
+  const [editingEntityId, setEditingEntityId] = useState(null)
+  const [newEntityType, setNewEntityType] = useState({
+    name: '',
+    emoji: '📦',
+    color: '#6366f1',
+    description: '',
+    placement_rules: '',
+    behavior: '',
+    collision_type: 'neutral',
+    metadata_fields: []
+  })
+  
+  // Common entity emojis
+  const ENTITY_EMOJIS = [
+    '🧑', '🚩', '🪙', '🔑', '💎', '⭐', '❤️', '💜', '🛡️',
+    '👾', '🦇', '🤖', '👻', '💀', '🕷️', '🐉', '👹', '👿',
+    '⚠️', '🔥', '💧', '❄️', '⚡', '💨', '☀️', '🌙', '🌀',
+    '📦', '🪨', '🌳', '🍄', '🌸', '🍀', '🌊', '⛰️', '🌋',
+    '⚔️', '🏹', '🔮', '📜', '🎁', '🏆', '🔔', '💣', '🧪'
+  ]
+  
   // Load projects and models on mount
   useEffect(() => {
     loadProjects()
@@ -272,6 +301,7 @@ function App() {
   useEffect(() => {
     if (currentProject) {
       loadLevels(currentProject.id)
+      loadEntityTypes(currentProject.id)
     }
   }, [currentProject])
   
@@ -318,6 +348,147 @@ function App() {
       setSelectedModel(modelName)
     } catch (err) {
       console.error('Failed to switch model:', err)
+    }
+  }
+  
+  const loadEntityTypes = async (projectId) => {
+    try {
+      const res = await fetch(`http://192.168.68.72:8000/api/projects/${projectId}/entity-types`)
+      const data = await res.json()
+      setEntityTypes(data)
+    } catch (err) {
+      console.error('Failed to load entity types:', err)
+    }
+  }
+  
+  const handleCreateEntityType = async () => {
+    setEditingEntityId(null)
+    setNewEntityType({
+      name: '',
+      emoji: '📦',
+      color: '#6366f1',
+      description: '',
+      placement_rules: '',
+      behavior: '',
+      collision_type: 'neutral',
+      metadata_fields: []
+    })
+    setShowEntityTypeForm(true)
+  }
+  
+  const handleEditEntityType = (entityType) => {
+    setEditingEntityId(entityType.id)
+    let metadataFields = []
+    try {
+      metadataFields = JSON.parse(entityType.metadata_fields || '[]')
+    } catch (e) {}
+    setNewEntityType({
+      name: entityType.name,
+      emoji: entityType.emoji,
+      color: entityType.color,
+      description: entityType.description || '',
+      placement_rules: entityType.placement_rules || '',
+      behavior: entityType.behavior || '',
+      collision_type: entityType.collision_type,
+      metadata_fields: metadataFields
+    })
+    setShowEntityTypeForm(true)
+  }
+  
+  const handleEntityTypeFormSubmit = async (e) => {
+    e.preventDefault()
+    if (!currentProject || !newEntityType.name.trim()) return
+    
+    const payload = {
+      ...newEntityType,
+      metadata_fields: JSON.stringify(newEntityType.metadata_fields)
+    }
+    
+    try {
+      if (editingEntityId) {
+        // Update existing entity type
+        await fetch(`http://192.168.68.72:8000/api/entity-types/${editingEntityId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        })
+      } else {
+        // Create new entity type
+        await fetch(`http://192.168.68.72:8000/api/projects/${currentProject.id}/entity-types`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        })
+      }
+      setShowEntityTypeForm(false)
+      setEditingEntityId(null)
+      setNewEntityType({
+        name: '',
+        emoji: '📦',
+        color: '#6366f1',
+        description: '',
+        placement_rules: '',
+        behavior: '',
+        collision_type: 'neutral',
+        metadata_fields: []
+      })
+      loadEntityTypes(currentProject.id)
+    } catch (err) {
+      setError('Failed to save entity type')
+    }
+  }
+  
+  const handleCancelEntityTypeForm = () => {
+    setShowEntityTypeForm(false)
+    setEditingEntityId(null)
+    setNewEntityType({
+      name: '',
+      emoji: '📦',
+      color: '#6366f1',
+      description: '',
+      placement_rules: '',
+      behavior: '',
+      collision_type: 'neutral',
+      metadata_fields: []
+    })
+  }
+  
+  // Metadata field management
+  const handleAddMetadataField = () => {
+    setNewEntityType(prev => ({
+      ...prev,
+      metadata_fields: [...prev.metadata_fields, { name: '', type: 'text', description: '', default: '' }]
+    }))
+  }
+  
+  const handleUpdateMetadataField = (index, field, value) => {
+    setNewEntityType(prev => ({
+      ...prev,
+      metadata_fields: prev.metadata_fields.map((f, i) => 
+        i === index ? { ...f, [field]: value } : f
+      )
+    }))
+  }
+  
+  const handleRemoveMetadataField = (index) => {
+    setNewEntityType(prev => ({
+      ...prev,
+      metadata_fields: prev.metadata_fields.filter((_, i) => i !== index)
+    }))
+  }
+  
+  const handleDeleteEntityType = async (entityTypeId) => {
+    if (!confirm('Delete this entity type?')) return
+    
+    try {
+      await fetch(`http://192.168.68.72:8000/api/entity-types/${entityTypeId}`, {
+        method: 'DELETE'
+      })
+      if (currentProject) {
+        loadEntityTypes(currentProject.id)
+      }
+    } catch (err) {
+      setError('Failed to delete entity type')
     }
   }
   
@@ -381,12 +552,11 @@ function App() {
   const handleGenerate = async () => {
     setGenerating(true)
     setError(null)
+    setProgress(0)
+    setProgressMessage('')
     
     try {
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 90000) // 90s timeout
-      
-      const response = await fetch('http://192.168.68.72:8000/api/generate', {
+      const response = await fetch('http://192.168.68.72:8000/api/generate/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -395,25 +565,48 @@ function App() {
           level_type: levelType,
           theme: theme || 'default',
           requirements: requirements || 'Create an engaging level',
-          model: selectedModel || undefined
-        }),
-        signal: controller.signal
+          model: selectedModel || undefined,
+          project_id: currentProject?.id
+        })
       })
       
       if (!response.ok) {
         throw new Error('Generation failed')
       }
       
-      const data = await response.json()
-      setLevel(data.level)
-    } catch (err) {
-      if (err.name === 'AbortError') {
-        setError('Generation timed out - try again')
-      } else {
-        setError(err.message || 'Failed to generate level')
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        
+        const chunk = decoder.decode(value)
+        const lines = chunk.split('\n')
+        
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6))
+              
+              if (data.event === 'progress') {
+                setProgress(data.progress)
+                setProgressMessage(data.message)
+              } else if (data.event === 'result') {
+                setLevel(data.level)
+                setProgress(100)
+              } else if (data.event === 'error') {
+                setError(data.message)
+              }
+            } catch (e) {
+              // Skip invalid JSON
+            }
+          }
+        }
       }
+    } catch (err) {
+      setError(err.message || 'Failed to generate level')
     } finally {
-      clearTimeout(timeoutId)
       setGenerating(false)
     }
   }
@@ -510,6 +703,161 @@ function App() {
                     <span className="level-info">{l.genre} • {l.difficulty} • v{l.version}</span>
                   </div>
                 ))
+              )}
+            </div>
+          )}
+          
+          {currentProject && (
+            <div className="entity-types-section">
+              <div className="entity-types-header">
+                <h3>🏗️ Custom Entities</h3>
+                <button className="add-entity-btn" onClick={handleCreateEntityType}>+ Add</button>
+              </div>
+              
+              {showEntityTypeForm && (
+                <form className="entity-type-form" onSubmit={handleEntityTypeFormSubmit}>
+                  <input
+                    type="text"
+                    placeholder="Name"
+                    value={newEntityType.name}
+                    onChange={(e) => setNewEntityType({...newEntityType, name: e.target.value})}
+                    className="entity-name-input"
+                    required
+                  />
+
+                  <div className="color-row">
+                    <label>Color:</label>
+                    <input
+                      type="color"
+                      value={newEntityType.color}
+                      onChange={(e) => setNewEntityType({...newEntityType, color: e.target.value})}
+                      className="color-input"
+                    />
+                  </div>
+                  
+                  <div className="emoji-picker">
+                    <label>Emoji:</label>
+                    <div className="emoji-list">
+                      {ENTITY_EMOJIS.map(emoji => (
+                        <button
+                          key={emoji}
+                          type="button"
+                          className={`emoji-option ${newEntityType.emoji === emoji ? 'selected' : ''}`}
+                          onClick={() => setNewEntityType({...newEntityType, emoji})}
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="emoji-custom">
+                      <span>Or custom:</span>
+                      <input
+                        type="text"
+                        value={newEntityType.emoji}
+                        onChange={(e) => setNewEntityType({...newEntityType, emoji: e.target.value})}
+                        className="emoji-input"
+                        placeholder="🎮"
+                      />
+                    </div>
+                  </div>
+                  
+                  <textarea
+                    placeholder="Description"
+                    value={newEntityType.description}
+                    onChange={(e) => setNewEntityType({...newEntityType, description: e.target.value})}
+                    rows={2}
+                  />
+                  <input
+                    type="text"
+                    placeholder="Placement rules (e.g., Place on platforms)"
+                    value={newEntityType.placement_rules}
+                    onChange={(e) => setNewEntityType({...newEntityType, placement_rules: e.target.value})}
+                  />
+                  <input
+                    type="text"
+                    placeholder="Behavior (e.g., Glows when player approaches)"
+                    value={newEntityType.behavior}
+                    onChange={(e) => setNewEntityType({...newEntityType, behavior: e.target.value})}
+                  />
+                  <select
+                    value={newEntityType.collision_type}
+                    onChange={(e) => setNewEntityType({...newEntityType, collision_type: e.target.value})}
+                  >
+                    <option value="neutral">Neutral</option>
+                    <option value="harmful">Harmful</option>
+                    <option value="helpful">Helpful</option>
+                  </select>
+                  
+                  {/* Metadata Fields Section */}
+                  <div className="metadata-fields-section">
+                    <div className="metadata-header">
+                      <label>Metadata Fields</label>
+                      <button type="button" className="add-metadata-btn" onClick={handleAddMetadataField}>+ Add Field</button>
+                    </div>
+                    {newEntityType.metadata_fields.length === 0 ? (
+                      <p className="no-metadata">No metadata fields. Add fields like hit_points, speed, speech_text, etc.</p>
+                    ) : (
+                      <div className="metadata-fields-list">
+                        {newEntityType.metadata_fields.map((field, index) => (
+                          <div key={index} className="metadata-field-item">
+                            <div className="metadata-field-row">
+                              <input
+                                type="text"
+                                placeholder="Field name (e.g., hit_points)"
+                                value={field.name}
+                                onChange={(e) => handleUpdateMetadataField(index, 'name', e.target.value)}
+                              />
+                              <select
+                                value={field.type}
+                                onChange={(e) => handleUpdateMetadataField(index, 'type', e.target.value)}
+                              >
+                                <option value="text">Text</option>
+                                <option value="number">Number</option>
+                                <option value="boolean">Boolean</option>
+                              </select>
+                              <button type="button" className="remove-metadata-btn" onClick={() => handleRemoveMetadataField(index)}>×</button>
+                            </div>
+                            <input
+                              type="text"
+                              placeholder="Description for AI (e.g., How much damage this enemy can take)"
+                              value={field.description}
+                              onChange={(e) => handleUpdateMetadataField(index, 'description', e.target.value)}
+                            />
+                            <input
+                              type="text"
+                              placeholder="Default value (e.g., 100)"
+                              value={field.default}
+                              onChange={(e) => handleUpdateMetadataField(index, 'default', e.target.value)}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="form-buttons">
+                    <button type="button" className="cancel-btn" onClick={handleCancelEntityTypeForm}>Cancel</button>
+                    <button type="submit" className="submit-btn">{editingEntityId ? 'Update' : 'Create'}</button>
+                  </div>
+                </form>
+              )}
+              
+              {entityTypes.length === 0 && !showEntityTypeForm ? (
+                <p className="no-entities">No custom entities yet</p>
+              ) : (
+                !showEntityTypeForm && (
+                  <div className="entity-types-list">
+                    {entityTypes.map(et => (
+                      <div key={et.id} className="entity-type-item">
+                        <span className="entity-emoji">{et.emoji}</span>
+                        <span className="entity-name">{et.name}</span>
+                        <span className="entity-collision" data-type={et.collision_type}>{et.collision_type}</span>
+                        <button className="edit-entity-btn" onClick={() => handleEditEntityType(et)}>✏️</button>
+                        <button className="delete-entity-btn" onClick={() => handleDeleteEntityType(et.id)}>×</button>
+                      </div>
+                    ))}
+                  </div>
+                )
               )}
             </div>
           )}
@@ -615,6 +963,22 @@ function App() {
           >
             {generating ? '🎲 Generating...' : '🚀 Generate Level'}
           </button>
+
+          {/* Progress Bar */}
+          {generating && (
+            <div className="progress-container">
+              <div className="progress-bar">
+                <div 
+                  className="progress-fill" 
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+              <div className="progress-info">
+                <span className="progress-message">{progressMessage}</span>
+                <span className="progress-percent">{progress}%</span>
+              </div>
+            </div>
+          )}
 
           {error && (
             <div className="error-message">
