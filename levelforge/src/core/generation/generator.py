@@ -206,16 +206,19 @@ class LevelGenerator:
                 model=self.model
             )
             
-            logger.debug(f"LLM response: {response[:200]}...")
+            logger.debug(f"LLM response length: {len(response)} characters")
+            logger.debug(f"First 500 chars: {response[:500]}...")
             
             # Parse the response
             parse_result = ResponseParser.parse_json_response(response)
             
             if not parse_result.success:
+                logger.error(f"Parse failed: {parse_result.error}")
+                logger.error(f"Full response: {response}")
                 return GenerationResult(
                     success=False,
                     raw_response=response,
-                    error=f"Failed to parse response: {parse_result.error}"
+                    error=f"Failed to parse response: {parse_result.error}. Response preview: {response[:200]}..."
                 )
             
             # Validate the level data

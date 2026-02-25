@@ -1,293 +1,122 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
+import Layout from './components/Layout'
+import Dashboard from './components/Dashboard'
+import Entities from './components/Entities'
+import Levels from './components/Levels'
+import Library from './components/Library'
+import AITools from './components/AITools'
+import Settings from './components/Settings'
 import './App.css'
 
-// Genre options
-const GENRES = [
-  { id: 'platformer', name: 'Platformer', icon: '🎮' },
-  { id: 'puzzle', name: 'Puzzle', icon: '🧩' },
-  { id: 'shooter', name: 'Shooter', icon: '🔫' },
-  { id: 'top_down_rpg', name: 'Top-Down RPG', icon: '🗺️' },
-  { id: 'dungeon_crawler', name: 'Dungeon Crawler', icon: '🏰' },
-]
-
-// Difficulty options
-const DIFFICULTIES = [
-  { id: 'easy', name: 'Easy', color: '#4ade80' },
-  { id: 'medium', name: 'Medium', color: '#facc15' },
-  { id: 'hard', name: 'Hard', color: '#f97316' },
-  { id: 'expert', name: 'Expert', color: '#ef4444' },
-]
-
-// Level type options
-const LEVEL_TYPES = [
-  { id: 'linear', name: 'Linear', description: 'Single path from start to goal' },
-  { id: 'metroidvania', name: 'Metroidvania', description: 'Multiple paths with gating' },
-]
-
-// Entity rendering config
-const ENTITY_STYLES = {
-  player_spawn: { emoji: '🧑', color: '#22c55e' },
-  goal: { emoji: '🚩', color: '#eab308' },
-  coin: { emoji: '🪙', color: '#facc15' },
-  key: { emoji: '🔑', color: '#a855f7' },
-  enemy_basic: { emoji: '👾', color: '#ef4444' },
-  enemy_flying: { emoji: '🦇', color: '#dc2626' },
-  enemy_patrol: { emoji: '🤖', color: '#f97316' },
-  spike: { emoji: '⚠️', color: '#6b7280' },
-  lava: { emoji: '🔥', color: '#dc2626' },
-  powerup: { emoji: '⭐', color: '#3b82f6' },
-}
-
-function LevelPreview({ level, isFullscreen, onClose }) {
-  const containerRef = useRef(null)
-  const canvasRef = useRef(null)
-  const [scale, setScale] = useState(1)
-  const [offset, setOffset] = useState({ x: 0, y: 0 })
-  const [isDragging, setIsDragging] = useState(false)
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
-  const [canvasSize, setCanvasSize] = useState({ width: 600, height: 400 })
-
-  // Calculate level bounds (memoized to prevent re-render loops)
-  const levelBounds = useMemo(() => ({
-    width: Math.max(800, ...(level?.platforms?.map(p => p.x + p.width) || [800])),
-    height: Math.max(600, ...(level?.platforms?.map(p => p.y + (p.height || 20)) || [600]))
-  }), [level?.platforms])
-
-  // Fit to screen on level change
-  useEffect(() => {
-    if (!level || !containerRef.current) return
-    const container = containerRef.current
-    const containerWidth = container.clientWidth - 32
-    const containerHeight = isFullscreen ? window.innerHeight - 100 : 400
-    
-    const scaleX = containerWidth / levelBounds.width
-    const scaleY = containerHeight / levelBounds.height
-    const newScale = Math.min(scaleX, scaleY, 1) * 0.9
-    
-    setScale(newScale)
-    setOffset({ 
-      x: (containerWidth - levelBounds.width * newScale) / 2,
-      y: (containerHeight - levelBounds.height * newScale) / 2
-    })
-    setCanvasSize({ width: containerWidth, height: containerHeight })
-  }, [level, isFullscreen, levelBounds])
-
-  const draw = useCallback(() => {
-    const canvas = canvasRef.current
-    if (!canvas || !level) return
-    
-    const ctx = canvas.getContext('2d')
-    const { width, height } = canvasSize
-    
-    // Clear canvas
-    ctx.fillStyle = '#1e1e2e'
-    ctx.fillRect(0, 0, width, height)
-    
-    const scaledWidth = levelBounds.width * scale
-    const scaledHeight = levelBounds.height * scale
-    const offsetX = offset.x
-    const offsetY = offset.y
-    
-    // Draw grid
-    ctx.strokeStyle = '#2d2d3d'
-    ctx.lineWidth = 1
-    const gridSize = 50 * scale
-    const gridStartX = offsetX % gridSize
-    const gridStartY = offsetY % gridSize
-    
-    for (let x = gridStartX; x < width; x += gridSize) {
-      ctx.beginPath()
-      ctx.moveTo(x, 0)
-      ctx.lineTo(x, height)
-      ctx.stroke()
-    }
-    for (let y = gridStartY; y < height; y += gridSize) {
-      ctx.beginPath()
-      ctx.moveTo(0, y)
-      ctx.lineTo(width, y)
-      ctx.stroke()
-    }
-    
-    // Draw platforms
-    ctx.fillStyle = '#475569'
-    ctx.strokeStyle = '#64748b'
-    ctx.lineWidth = 2
-    level.platforms?.forEach(platform => {
-      const x = offsetX + platform.x * scale
-      const y = offsetY + platform.y * scale
-      const w = platform.width * scale
-      const h = (platform.height || 20) * scale
-      
-      ctx.fillRect(x, y, w, h)
-      ctx.strokeRect(x, y, w, h)
-    })
-    
-    // Draw entities with emojis
-    ctx.font = `${Math.max(16, 24 * scale)}px sans-serif`
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    
-    level.entities?.forEach(entity => {
-      const style = ENTITY_STYLES[entity.type] || { emoji: '❓', color: '#ffffff' }
-      const x = offsetX + entity.x * scale
-      const y = offsetY + entity.y * scale
-      
-      // Draw background circle
-      ctx.fillStyle = style.color + '40'
-      ctx.beginPath()
-      ctx.arc(x, y, 16 * scale, 0, Math.PI * 2)
-      ctx.fill()
-      
-      // Draw emoji
-      ctx.fillStyle = style.color
-      ctx.fillText(style.emoji, x, y)
-    })
-    
-  }, [level, scale, offset, canvasSize, levelBounds])
-
-  useEffect(() => {
-    draw()
-  }, [draw])
-
-  // Mouse handlers for panning
-  const handleMouseDown = (e) => {
-    setIsDragging(true)
-    setDragStart({ x: e.clientX - offset.x, y: e.clientY - offset.y })
-  }
-
-  const handleMouseMove = (e) => {
-    if (!isDragging) return
-    setOffset({
-      x: e.clientX - dragStart.x,
-      y: e.clientY - dragStart.y
-    })
-  }
-
-  const handleMouseUp = () => {
-    setIsDragging(false)
-  }
-
-  const handleWheel = (e) => {
-    e.preventDefault()
-    const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1
-    const newScale = Math.max(0.1, Math.min(3, scale * zoomFactor))
-    
-    // Zoom toward mouse position
-    const rect = canvasRef.current.getBoundingClientRect()
-    const mouseX = e.clientX - rect.left
-    const mouseY = e.clientY - rect.top
-    
-    const newOffsetX = mouseX - (mouseX - offset.x) * (newScale / scale)
-    const newOffsetY = mouseY - (mouseY - offset.y) * (newScale / scale)
-    
-    setScale(newScale)
-    setOffset({ x: newOffsetX, y: newOffsetY })
-  }
-
-  const handleZoomIn = () => setScale(s => Math.min(3, s * 1.2))
-  const handleZoomOut = () => setScale(s => Math.max(0.1, s / 1.2))
-  const handleResetView = () => {
-    if (!containerRef.current) return
-    const containerWidth = containerRef.current.clientWidth - 32
-    const containerHeight = isFullscreen ? window.innerHeight - 100 : 400
-    const scaleX = containerWidth / levelBounds.width
-    const scaleY = containerHeight / levelBounds.height
-    const newScale = Math.min(scaleX, scaleY, 1) * 0.9
-    setScale(newScale)
-    setOffset({ 
-      x: (containerWidth - levelBounds.width * newScale) / 2,
-      y: (containerHeight - levelBounds.height * newScale) / 2
-    })
-  }
-
-  return (
-    <div className={`level-preview ${isFullscreen ? 'fullscreen' : ''}`} ref={containerRef}>
-      <div className="preview-toolbar">
-        <div className="zoom-controls">
-          <button onClick={handleZoomOut} title="Zoom Out">➖</button>
-          <span>{Math.round(scale * 100)}%</span>
-          <button onClick={handleZoomIn} title="Zoom In">➕</button>
-          <button onClick={handleResetView} title="Reset View">🎯</button>
-        </div>
-        <div className="preview-info">
-          {levelBounds.width} × {levelBounds.height}
-        </div>
-        {isFullscreen && (
-          <button className="close-btn" onClick={onClose}>✕ Close</button>
-        )}
-      </div>
-      <canvas
-        ref={canvasRef}
-        width={canvasSize.width}
-        height={canvasSize.height}
-        style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
-        onWheel={handleWheel}
-      />
-    </div>
-  )
-}
+const API_BASE = 'http://192.168.68.72:8000'
 
 function App() {
+  // Navigation state
+  const [activeTab, setActiveTab] = useState('dashboard')
+  
+  // Theme state
+  const [theme, setTheme] = useState(() => {
+    const saved = localStorage.getItem('levelforge-theme')
+    return saved || 'dark'
+  })
+  const [accentColor, setAccentColor] = useState(() => {
+    const saved = localStorage.getItem('levelforge-accent')
+    return saved || 'indigo'
+  })
+  
+  // Apply theme on mount and changes
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme)
+    document.documentElement.setAttribute('data-accent', accentColor)
+    localStorage.setItem('levelforge-theme', theme)
+    localStorage.setItem('levelforge-accent', accentColor)
+  }, [theme, accentColor])
+  
   // Project state
   const [projects, setProjects] = useState([])
   const [currentProject, setCurrentProject] = useState(null)
   const [levels, setLevels] = useState([])
+  const [showProjectModal, setShowProjectModal] = useState(false)
+  const [recentProjects, setRecentProjects] = useState(() => {
+    const saved = localStorage.getItem('levelforge-recent-projects')
+    return saved ? JSON.parse(saved) : []
+  })
   
-  // Form state
-  const [genre, setGenre] = useState('platformer')
-  const [difficulty, setDifficulty] = useState('medium')
-  const [levelType, setLevelType] = useState('linear')
-  const [theme, setTheme] = useState('')
-  const [requirements, setRequirements] = useState('')
+  // Entity types state
+  const [entityTypes, setEntityTypes] = useState([])
+  
+  // Selection state (for inspector)
+  const [selectedItem, setSelectedItem] = useState(null)
+  const [inspectorContent, setInspectorContent] = useState(null)
+  
+  // Console state
+  const [consoleLogs, setConsoleLogs] = useState([])
+  const [forceShowConsole, setForceShowConsole] = useState(false)
   
   // Generation state
   const [generating, setGenerating] = useState(false)
-  const [level, setLevel] = useState(null)
-  const [error, setError] = useState(null)
-  
-  // Preview state
-  const [showPreview, setShowPreview] = useState(true)
-  const [showJson, setShowJson] = useState(false)
-  const [isFullscreen, setIsFullscreen] = useState(false)
-  
-  // Refinement state
-  const [modification, setModification] = useState('')
-  const [refining, setRefining] = useState(false)
+  const [progress, setProgress] = useState(0)
+  const [progressMessage, setProgressMessage] = useState('')
+  const [currentLevel, setCurrentLevel] = useState(null)
+  const [showGenerator, setShowGenerator] = useState(false)
   
   // Model state
-  const [availableModels, setAvailableModels] = useState([])
+  const [availableModels, setAvailableModels] = useState({})
   const [selectedModel, setSelectedModel] = useState('')
+  
+  // Console logging helper
+  const logToConsole = (message, type = 'info') => {
+    const time = new Date().toLocaleTimeString('en-US', { hour12: false })
+    setConsoleLogs(prev => [...prev, { message, type, time }])
+    
+    // Auto-show console on errors and AI progress
+    if (type === 'error' || type === 'ai-progress') {
+      setForceShowConsole(true)
+    }
+  }
+  
+  // Clear console
+  const handleClearConsole = () => {
+    setConsoleLogs([])
+  }
   
   // Load projects and models on mount
   useEffect(() => {
     loadProjects()
     loadModels()
+    logToConsole('LevelForge initialized', 'system')
   }, [])
   
-  // Load levels when project changes
+  // Load levels and entity types when project changes
   useEffect(() => {
     if (currentProject) {
       loadLevels(currentProject.id)
+      loadEntityTypes(currentProject.id)
+      logToConsole(`Loaded project: ${currentProject.name}`, 'info')
     }
   }, [currentProject])
   
+  // Clear selection when changing tabs
+  useEffect(() => {
+    setSelectedItem(null)
+    setInspectorContent(null)
+  }, [activeTab])
+  
+  // API functions
   const loadProjects = async () => {
     try {
-      const res = await fetch('http://192.168.68.72:8000/api/projects')
+      const res = await fetch(`${API_BASE}/api/projects`)
       const data = await res.json()
       setProjects(data)
     } catch (err) {
       console.error('Failed to load projects:', err)
+      logToConsole('Failed to load projects', 'error')
     }
   }
   
   const loadLevels = async (projectId) => {
     try {
-      const res = await fetch(`http://192.168.68.72:8000/api/projects/${projectId}/levels`)
+      const res = await fetch(`${API_BASE}/api/projects/${projectId}/levels`)
       const data = await res.json()
       setLevels(data)
     } catch (err) {
@@ -295,13 +124,24 @@ function App() {
     }
   }
   
+  const loadEntityTypes = async (projectId) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/projects/${projectId}/entity-types`)
+      const data = await res.json()
+      setEntityTypes(data)
+    } catch (err) {
+      console.error('Failed to load entity types:', err)
+    }
+  }
+  
   const loadModels = async () => {
     try {
-      const res = await fetch('http://192.168.68.72:8000/api/models')
+      const res = await fetch(`${API_BASE}/api/models`)
       const data = await res.json()
       if (data.providers) {
         setAvailableModels(data.providers)
         setSelectedModel(data.current || '')
+        logToConsole(`AI model: ${data.current} (${data.current_provider})`, 'info')
       }
     } catch (err) {
       console.error('Failed to load models:', err)
@@ -310,14 +150,16 @@ function App() {
   
   const handleModelChange = async (modelName) => {
     try {
-      await fetch('http://192.168.68.72:8000/api/models', {
+      await fetch(`${API_BASE}/api/models`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ model: modelName })
       })
       setSelectedModel(modelName)
+      logToConsole(`Switched to model: ${modelName}`, 'info')
     } catch (err) {
       console.error('Failed to switch model:', err)
+      logToConsole('Failed to switch model', 'error')
     }
   }
   
@@ -326,414 +168,676 @@ function App() {
     if (!name) return
     
     try {
-      const res = await fetch(`http://192.168.68.72:8000/api/projects?name=${encodeURIComponent(name)}`, {
+      const res = await fetch(`${API_BASE}/api/projects?name=${encodeURIComponent(name)}`, {
         method: 'POST'
       })
       const data = await res.json()
       await loadProjects()
       setCurrentProject({ id: data.id, name: data.name })
+      setActiveTab('levels')
+      logToConsole(`Created project: ${name}`, 'success')
     } catch (err) {
-      setError('Failed to create project')
+      console.error('Failed to create project:', err)
+      logToConsole('Failed to create project', 'error')
     }
   }
   
   const handleSelectProject = (project) => {
     setCurrentProject(project)
-    setLevel(null)
+    setSelectedItem({ type: 'Project', name: project.name, ...project })
+    loadLevels(project.id)
+    loadEntityTypes(project.id)
+    
+    // Update recent projects
+    const updated = [{ id: project.id, name: project.name, timestamp: Date.now() }, 
+                     ...recentProjects.filter(p => p.id !== project.id)]
+                     .slice(0, 4)
+    setRecentProjects(updated)
+    localStorage.setItem('levelforge-recent-projects', JSON.stringify(updated))
+    
+    logToConsole(`Loaded project: ${project.name}`, 'info')
   }
   
-  const handleSaveLevel = async () => {
-    if (!currentProject || !level) return
-    
-    const name = prompt('Level name:', `Level ${levels.length + 1}`)
-    if (!name) return
-    
-    try {
-      await fetch(`http://192.168.68.72:8000/api/projects/${currentProject.id}/levels`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name,
-          genre: level.genre || genre,
-          difficulty: level.difficulty || difficulty,
-          level_type: level.type || levelType,
-          theme: level.theme || theme,
-          level_data: JSON.stringify(level)
-        })
-      })
-      await loadLevels(currentProject.id)
-      alert('Level saved!')
-    } catch (err) {
-      setError('Failed to save level')
+  const handleOpenProject = () => {
+    setShowProjectModal(true)
+  }
+  
+  const handleOpenRecentProject = (projectId) => {
+    const project = projects.find(p => p.id === projectId)
+    if (project) {
+      handleSelectProject(project)
     }
   }
   
-  const handleLoadLevel = async (levelId) => {
-    try {
-      const res = await fetch(`http://192.168.68.72:8000/api/levels/${levelId}`)
-      const data = await res.json()
-      setLevel(JSON.parse(data.level_data))
-    } catch (err) {
-      setError('Failed to load level')
-    }
+  const handleCloseProjectModal = () => {
+    setShowProjectModal(false)
   }
-
-  const handleGenerate = async () => {
+  
+  const handleGenerateLevel = async (settings) => {
+    if (!currentProject) {
+      const msg = 'Please select a project first'
+      logToConsole(msg, 'error')
+      alert(msg)
+      return
+    }
+    
+    // Auto-show console when generation starts
+    logToConsole('=== Level Generation Started ===', 'ai-progress')
+    logToConsole(`Project: ${currentProject.name}`, 'system')
+    logToConsole(`Genre: ${settings.genre}`, 'system')
+    logToConsole(`Difficulty: ${settings.difficulty}`, 'system')
+    logToConsole(`Theme: ${settings.theme}`, 'system')
+    
     setGenerating(true)
-    setError(null)
+    setProgress(0)
+    setProgressMessage('Starting...')
     
     try {
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 90000) // 90s timeout
+      logToConsole('Sending request to backend...', 'ai-progress')
       
-      const response = await fetch('http://192.168.68.72:8000/api/generate', {
+      const requestBody = {
+        ...settings,
+        model: selectedModel || undefined,
+        project_id: currentProject.id
+      }
+      logToConsole(`Request: ${JSON.stringify(requestBody, null, 2)}`, 'debug')
+      
+      const response = await fetch(`${API_BASE}/api/generate/stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          genre,
-          difficulty,
-          level_type: levelType,
-          theme: theme || 'default',
-          requirements: requirements || 'Create an engaging level',
-          model: selectedModel || undefined
-        }),
-        signal: controller.signal
+        body: JSON.stringify(requestBody)
       })
       
       if (!response.ok) {
-        throw new Error('Generation failed')
+        const errorText = await response.text()
+        logToConsole(`Server error (${response.status}): ${errorText}`, 'error')
+        throw new Error(`Server returned ${response.status}: ${errorText}`)
       }
       
-      const data = await response.json()
-      setLevel(data.level)
-    } catch (err) {
-      if (err.name === 'AbortError') {
-        setError('Generation timed out - try again')
-      } else {
-        setError(err.message || 'Failed to generate level')
+      logToConsole('✓ Connected to backend, streaming response...', 'success')
+      
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let eventCount = 0
+      
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) {
+          logToConsole('Stream ended', 'system')
+          break
+        }
+        
+        const chunk = decoder.decode(value)
+        const lines = chunk.split('\n')
+        
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            eventCount++
+            try {
+              const data = JSON.parse(line.slice(6))
+              logToConsole(`Event: ${data.event}`, 'debug')
+              
+              if (data.event === 'progress') {
+                setProgress(data.progress)
+                setProgressMessage(data.message)
+                logToConsole(`  → ${data.message} (${data.progress}%)`, 'ai-progress')
+              } else if (data.event === 'result') {
+                setCurrentLevel(data.level)
+                setProgress(100)
+                setProgressMessage('Done!')
+                await loadLevels(currentProject.id)
+                logToConsole('✓ Level generated successfully!', 'success')
+                logToConsole(`Level ID: ${data.level.id}`, 'system')
+              } else if (data.event === 'error') {
+                logToConsole(`✗ Generation error: ${data.message}`, 'error')
+                alert(`Generation failed: ${data.message}`)
+              }
+            } catch (e) {
+              logToConsole(`Parse error for line: ${line}`, 'warning')
+            }
+          }
+        }
       }
+      
+      if (eventCount === 0) {
+        logToConsole('⚠ No events received from stream', 'warning')
+      }
+    } catch (err) {
+      console.error('Generation error:', err)
+      logToConsole(`✗ Generation failed: ${err.message}`, 'error')
+      logToConsole(`Stack trace: ${err.stack}`, 'debug')
+      alert(`Failed to generate level: ${err.message}`)
     } finally {
-      clearTimeout(timeoutId)
       setGenerating(false)
+      logToConsole('Generation process completed', 'system')
     }
   }
-
-  const handleRefine = async () => {
-    if (!level || !modification.trim()) return
-    
-    setRefining(true)
-    setError(null)
-    
+  
+  // Entity type CRUD
+  const handleCreateEntityType = async (data) => {
     try {
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 60000) // 60s timeout
-      
-      const response = await fetch('http://192.168.68.72:8000/api/refine', {
+      await fetch(`${API_BASE}/api/projects/${currentProject.id}/entity-types`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          level_data: level,
-          modification: modification
-        }),
-        signal: controller.signal
+        body: JSON.stringify(data)
       })
-      
-      clearTimeout(timeoutId)
-      
-      if (!response.ok) {
-        throw new Error('Refinement failed')
-      }
-      
-      const data = await response.json()
-      setLevel(data.level)
-      setModification('')
+      loadEntityTypes(currentProject.id)
+      logToConsole(`Created entity: ${data.name}`, 'success')
     } catch (err) {
-      if (err.name === 'AbortError') {
-        setError('Refinement timed out - try a simpler modification')
-      } else {
-        setError(err.message || 'Failed to refine level')
-      }
-    } finally {
-      setRefining(false)
+      console.error('Failed to create entity type:', err)
+      logToConsole('Failed to create entity', 'error')
     }
   }
-
-  const handleExportJson = () => {
-    if (!level) return
-    const blob = new Blob([JSON.stringify(level, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `levelforge-${level.genre}-${level.difficulty}.json`
-    a.click()
-    URL.revokeObjectURL(url)
+  
+  const handleUpdateEntityType = async (id, data) => {
+    try {
+      await fetch(`${API_BASE}/api/entity-types/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      })
+      loadEntityTypes(currentProject.id)
+      logToConsole(`Updated entity: ${data.name}`, 'success')
+    } catch (err) {
+      console.error('Failed to update entity type:', err)
+      logToConsole('Failed to update entity', 'error')
+    }
   }
-
-  return (
-    <div className="app">
-      <header className="header">
-        <h1>🎮 LevelForge AI</h1>
-        <p>AI-powered level design for game developers</p>
-      </header>
-
-      <main className="main">
-        {/* Project Management */}
-        <section className="project-panel">
-          <div className="project-header">
-            <h3>📁 Projects</h3>
-            <button className="new-project-btn" onClick={handleCreateProject}>+ New Project</button>
-          </div>
-          
-          {projects.length > 0 && (
-            <div className="project-list">
-              {projects.map(p => (
-                <button
-                  key={p.id}
-                  className={`project-item ${currentProject?.id === p.id ? 'active' : ''}`}
-                  onClick={() => handleSelectProject(p)}
-                >
-                  {p.name}
-                </button>
-              ))}
-            </div>
-          )}
-          
-          {currentProject && (
-            <div className="level-list">
-              <h3>Levels in {currentProject.name}</h3>
-              {levels.length === 0 ? (
-                <p className="no-levels">No levels yet. Generate one below!</p>
-              ) : (
-                levels.map(l => (
-                  <div key={l.id} className="level-item" onClick={() => handleLoadLevel(l.id)}>
-                    <span className="level-name">{l.name}</span>
-                    <span className="level-info">{l.genre} • {l.difficulty} • v{l.version}</span>
-                  </div>
-                ))
-              )}
-            </div>
-          )}
-        </section>
-
-        <section className="config-panel">
-          <h2>Level Configuration</h2>
-          
-          {availableModels && Object.keys(availableModels).length > 0 && (
-            <div className="form-group">
-              <label>AI Model</label>
-              <select 
-                value={selectedModel} 
-                onChange={(e) => handleModelChange(e.target.value)}
-                className="model-select"
-              >
-                {Object.entries(availableModels).map(([provider, models]) => (
-                  models.map(m => (
-                    <option key={m.name} value={m.name}>
-                      {provider.toUpperCase()}: {m.display || m.name}
-                    </option>
-                  ))
-                ))}
-              </select>
-            </div>
-          )}
-          
-          <div className="form-group">
-            <label>Genre</label>
-            <div className="genre-grid">
-              {GENRES.map(g => (
-                <button
-                  key={g.id}
-                  className={`genre-btn ${genre === g.id ? 'active' : ''}`}
-                  onClick={() => setGenre(g.id)}
-                >
-                  <span className="genre-icon">{g.icon}</span>
-                  <span className="genre-name">{g.name}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="form-group">
-            <label>Level Type</label>
-            <div className="type-grid">
-              {LEVEL_TYPES.map(t => (
-                <button
-                  key={t.id}
-                  className={`type-btn ${levelType === t.id ? 'active' : ''}`}
-                  onClick={() => setLevelType(t.id)}
-                >
-                  <span className="type-name">{t.name}</span>
-                  <span className="type-desc">{t.description}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="form-group">
-            <label>Difficulty</label>
-            <div className="difficulty-row">
-              {DIFFICULTIES.map(d => (
-                <button
-                  key={d.id}
-                  className={`difficulty-btn ${difficulty === d.id ? 'active' : ''}`}
-                  style={{ 
-                    '--active-color': d.color,
-                    borderColor: difficulty === d.id ? d.color : 'transparent'
-                  }}
-                  onClick={() => setDifficulty(d.id)}
-                >
-                  {d.name}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="form-group">
-            <label>Theme (optional)</label>
-            <input
-              type="text"
-              placeholder="e.g., forest, castle, space station..."
-              value={theme}
-              onChange={(e) => setTheme(e.target.value)}
-            />
-          </div>
-
-          <div className="form-group">
-            <label>Additional Requirements (optional)</label>
-            <textarea
-              placeholder="e.g., Include 5 coins, add a moving platform..."
-              value={requirements}
-              onChange={(e) => setRequirements(e.target.value)}
-              rows={3}
-            />
-          </div>
-
-          <button 
-            className={`generate-btn ${generating ? 'loading' : ''}`}
-            onClick={handleGenerate}
-            disabled={generating}
-          >
-            {generating ? '🎲 Generating...' : '🚀 Generate Level'}
-          </button>
-
-          {error && (
-            <div className="error-message">
-              ⚠️ {error}
-            </div>
-          )}
-        </section>
-
-        {level && (
-          <section className="results-panel">
-            <div className="results-header">
-              <h2>Generated Level</h2>
-              <div className="results-actions">
-                <button onClick={() => setShowPreview(!showPreview)}>
-                  {showPreview ? '🎨 Hide Preview' : '🎨 Show Preview'}
-                </button>
-                <button onClick={() => setIsFullscreen(!isFullscreen)}>
-                  {isFullscreen ? '↙ Compact' : '⛶ Fullscreen'}
-                </button>
-                <button onClick={() => setShowJson(!showJson)}>
-                  {showJson ? '📄 Hide JSON' : '📄 Show JSON'}
-                </button>
-                <button onClick={handleExportJson}>💾 Export JSON</button>
-                {currentProject && (
-                  <button onClick={handleSaveLevel}>💿 Save to Project</button>
-                )}
-              </div>
-            </div>
-
-            <div className="level-info">
-              <span className="badge">{level.genre}</span>
-              <span className="badge">{level.difficulty}</span>
-              {level.theme && <span className="badge">{level.theme}</span>}
-            </div>
-
-            {showPreview && (
-              <LevelPreview 
-                level={level} 
-                isFullscreen={isFullscreen}
-                onClose={() => setIsFullscreen(false)}
-              />
-            )}
-
-            {showJson && (
-              <div className="preview-container">
-                <pre className="json-preview">
-                  {JSON.stringify(level, null, 2)}
-                </pre>
-              </div>
-            )}
-
-            <div className="level-stats">
-              <div className="stat">
-                <span className="stat-label">Platforms</span>
-                <span className="stat-value">{level.platforms?.length || 0}</span>
-              </div>
-              <div className="stat">
-                <span className="stat-label">Entities</span>
-                <span className="stat-value">{level.entities?.length || 0}</span>
-              </div>
-              {level.metadata?.difficulty_score && (
-                <div className="stat">
-                  <span className="stat-label">Difficulty</span>
-                  <span className="stat-value">{level.metadata.difficulty_score}/10</span>
-                </div>
-              )}
-            </div>
-            
-            <div className="legend">
-              <span className="legend-item">🧑 Player</span>
-              <span className="legend-item">🚩 Goal</span>
-              <span className="legend-item">🪙 Coin</span>
-              <span className="legend-item">🔑 Key</span>
-              <span className="legend-item">👾 Enemy</span>
-              <span className="legend-item">🔥 Hazard</span>
-              <span className="legend-item">⭐ Powerup</span>
-              <span className="legend-item">■ Platform</span>
-            </div>
-            
-            {/* Refinement Section */}
-            <div className="refine-section">
-              <h3>✨ Refine Level</h3>
-              <div className="refine-suggestions">
-                <button onClick={() => setModification('Make the level harder')}>Make Harder</button>
-                <button onClick={() => setModification('Add more platforms')}>Add Platforms</button>
-                <button onClick={() => setModification('Add more coins')}>Add Coins</button>
-                <button onClick={() => setModification('Add more enemies')}>Add Enemies</button>
-                <button onClick={() => setModification('Make the level easier')}>Make Easier</button>
-              </div>
-              <div className="refine-input">
-                <textarea
-                  placeholder="Or describe your own modification..."
-                  value={modification}
-                  onChange={(e) => setModification(e.target.value)}
-                  rows={2}
-                />
-                <button 
-                  className={`refine-btn ${refining ? 'loading' : ''}`}
-                  onClick={handleRefine}
-                  disabled={refining || !modification.trim()}
-                >
-                  {refining ? '✨ Refining...' : '✨ Refine'}
-                </button>
-              </div>
-            </div>
-          </section>
-        )}
-      </main>
-
-      {isFullscreen && level && (
-        <div className="fullscreen-overlay">
-          <LevelPreview 
-            level={level} 
-            isFullscreen={true}
-            onClose={() => setIsFullscreen(false)}
+  
+  const handleDeleteEntityType = async (id) => {
+    if (!confirm('Delete this entity type?')) return
+    
+    try {
+      await fetch(`${API_BASE}/api/entity-types/${id}`, {
+        method: 'DELETE'
+      })
+      loadEntityTypes(currentProject.id)
+      setSelectedItem(null)
+      logToConsole('Entity deleted', 'info')
+    } catch (err) {
+      console.error('Failed to delete entity type:', err)
+      logToConsole('Failed to delete entity', 'error')
+    }
+  }
+  
+  const handleSelectLevel = (level) => {
+    setCurrentLevel(level)
+    setSelectedItem({ type: 'Level', ...level })
+  }
+  
+  const handleSelectEntity = (entity) => {
+    setSelectedItem({ type: 'Entity', ...entity })
+    setInspectorContent(null) // Clear any edit form
+  }
+  
+  const handleSelectAsset = (asset) => {
+    setSelectedItem({ type: 'Asset', ...asset })
+    setInspectorContent(null)
+  }
+  
+  // Entity editing state
+  const [editingEntity, setEditingEntity] = useState(null)
+  const [entityFormData, setEntityFormData] = useState({})
+  
+  const handleEditEntity = (entity) => {
+    setEditingEntity(entity)
+    setEntityFormData({
+      name: entity.name,
+      emoji: entity.emoji,
+      color: entity.color,
+      description: entity.description || '',
+      placement_rules: entity.placement_rules || '',
+      behavior: entity.behavior || '',
+      collision_type: entity.collision_type,
+      category: entity.category || 'actors',
+      metadata_fields: JSON.parse(entity.metadata_fields || '[]')
+    })
+    setSelectedItem({ type: 'Entity', ...entity })
+  }
+  
+  const handleSaveEntity = async () => {
+    const data = { ...entityFormData, metadata_fields: JSON.stringify(entityFormData.metadata_fields) }
+    await handleUpdateEntityType(editingEntity.id, data)
+    setEditingEntity(null)
+    setInspectorContent(null)
+    setSelectedItem(null)
+  }
+  
+  const handleCancelEditEntity = () => {
+    setEditingEntity(null)
+    setInspectorContent(null)
+  }
+  
+  // Entity edit form for inspector
+  const renderEntityEditForm = () => {
+    if (!editingEntity) return null
+    
+    const ENTITY_EMOJIS = [
+      '🧑', '🚩', '🪙', '🔑', '💎', '⭐', '❤️', '💜', '🛡️',
+      '👾', '🦇', '🤖', '👻', '💀', '🕷️', '🐉', '👹', '👿',
+      '⚠️', '🔥', '💧', '❄️', '⚡', '💨', '☀️', '🌙', '🌀',
+      '📦', '🪨', '🌳', '🍄', '🌸', '🍀', '🌊', '⛰️', '🌋',
+      '⚔️', '🏹', '🔮', '📜', '🎁', '🏆', '🔔', '💣', '🧪'
+    ]
+    
+    const METADATA_TYPES = ['text', 'number', 'boolean', 'select']
+    
+    const handleAddMetadataField = () => {
+      setEntityFormData(prev => ({
+        ...prev,
+        metadata_fields: [...prev.metadata_fields, { name: '', type: 'text', description: '', default: '' }]
+      }))
+    }
+    
+    const handleUpdateMetadataField = (index, field, value) => {
+      setEntityFormData(prev => ({
+        ...prev,
+        metadata_fields: prev.metadata_fields.map((f, i) => 
+          i === index ? { ...f, [field]: value } : f
+        )
+      }))
+    }
+    
+    const handleRemoveMetadataField = (index) => {
+      setEntityFormData(prev => ({
+        ...prev,
+        metadata_fields: prev.metadata_fields.filter((_, i) => i !== index)
+      }))
+    }
+    
+    return (
+      <div className="inspector-edit-form">
+        <div className="form-section">
+          <label>Name</label>
+          <input
+            type="text"
+            value={entityFormData.name}
+            onChange={e => setEntityFormData({...entityFormData, name: e.target.value})}
+            placeholder="Entity name..."
           />
         </div>
-      )}
-    </div>
+        
+        <div className="form-row">
+          <div className="form-section half">
+            <label>Color</label>
+            <input
+              type="color"
+              value={entityFormData.color}
+              onChange={e => setEntityFormData({...entityFormData, color: e.target.value})}
+            />
+          </div>
+          <div className="form-section half">
+            <label>Collision</label>
+            <select
+              value={entityFormData.collision_type}
+              onChange={e => setEntityFormData({...entityFormData, collision_type: e.target.value})}
+            >
+              <option value="neutral">Neutral</option>
+              <option value="harmful">Harmful</option>
+              <option value="helpful">Helpful</option>
+            </select>
+          </div>
+        </div>
+        
+        <div className="form-section">
+          <label>Emoji</label>
+          <div className="emoji-grid">
+            {ENTITY_EMOJIS.slice(0, 18).map(emoji => (
+              <button
+                key={emoji}
+                type="button"
+                className={`emoji-btn ${entityFormData.emoji === emoji ? 'selected' : ''}`}
+                onClick={() => setEntityFormData({...entityFormData, emoji})}
+              >
+                {emoji}
+              </button>
+            ))}
+          </div>
+          <input
+            type="text"
+            value={entityFormData.emoji}
+            onChange={e => setEntityFormData({...entityFormData, emoji: e.target.value})}
+            placeholder="Or type custom..."
+            className="mt-2"
+          />
+        </div>
+        
+        <div className="form-section">
+          <label>Description</label>
+          <textarea
+            value={entityFormData.description}
+            onChange={e => setEntityFormData({...entityFormData, description: e.target.value})}
+            placeholder="Description for AI..."
+            rows={2}
+          />
+        </div>
+        
+        <div className="form-section">
+          <label>Placement Rules</label>
+          <input
+            type="text"
+            value={entityFormData.placement_rules}
+            onChange={e => setEntityFormData({...entityFormData, placement_rules: e.target.value})}
+            placeholder="e.g., Place on platforms"
+          />
+        </div>
+        
+        <div className="form-section">
+          <label>Behavior</label>
+          <input
+            type="text"
+            value={entityFormData.behavior}
+            onChange={e => setEntityFormData({...entityFormData, behavior: e.target.value})}
+            placeholder="e.g., Patrols left/right"
+          />
+        </div>
+        
+        <div className="form-section">
+          <div className="section-header">
+            <label>Metadata Fields</label>
+            <button type="button" className="btn-link" onClick={handleAddMetadataField}>+ Add</button>
+          </div>
+          {entityFormData.metadata_fields.length === 0 ? (
+            <p className="hint">Add fields like hit_points, speed, etc.</p>
+          ) : (
+            <div className="metadata-list">
+              {entityFormData.metadata_fields.map((field, index) => (
+                <div key={index} className="metadata-item">
+                  <input
+                    type="text"
+                    value={field.name}
+                    onChange={e => handleUpdateMetadataField(index, 'name', e.target.value)}
+                    placeholder="Field name"
+                  />
+                  <select
+                    value={field.type}
+                    onChange={e => handleUpdateMetadataField(index, 'type', e.target.value)}
+                  >
+                    {METADATA_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                  <button 
+                    type="button" 
+                    className="btn-icon danger"
+                    onClick={() => handleRemoveMetadataField(index)}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        
+        <div className="form-actions">
+          <button className="btn-secondary" onClick={handleCancelEditEntity}>Cancel</button>
+          <button className="btn-primary" onClick={handleSaveEntity}>Update</button>
+        </div>
+      </div>
+    )
+  }
+  
+  const handleMenuAction = (action, menu) => {
+    logToConsole(`Menu: ${menu} > ${action}`, 'info')
+    
+    // File menu
+    if (menu === 'file') {
+      switch (action) {
+        case 'new-project':
+          handleCreateProject()
+          break
+        case 'open-project':
+          handleOpenProject()
+          break
+        case 'save':
+          logToConsole('Project saved', 'success')
+          break
+        case 'project-settings':
+          setActiveTab('settings')
+          break
+        case 'exit':
+          if (confirm('Exit LevelForge?')) {
+            window.close()
+          }
+          break
+        default:
+          // Handle recent project actions (format: recent-{id})
+          if (action.startsWith('recent-')) {
+            const projectId = parseInt(action.replace('recent-', ''))
+            if (!isNaN(projectId)) {
+              handleOpenRecentProject(projectId)
+            }
+          }
+      }
+    }
+    
+    // Edit menu
+    if (menu === 'edit') {
+      switch (action) {
+        case 'preferences':
+          setActiveTab('settings')
+          break
+      }
+    }
+    
+    // View menu
+    if (menu === 'view') {
+      switch (action) {
+        case 'toggle-inspector':
+          // Handled by layout
+          break
+        case 'toggle-console':
+          // Handled by layout
+          break
+        case 'fullscreen':
+          if (document.fullscreenElement) {
+            document.exitFullscreen()
+          } else {
+            document.documentElement.requestFullscreen()
+          }
+          break
+      }
+    }
+    
+    // Entities menu
+    if (menu === 'entities') {
+      switch (action) {
+        case 'create-actor':
+        case 'create-item':
+        case 'create-terrain':
+        case 'create-behavior':
+        case 'create-script':
+          setActiveTab('entities')
+          // Could trigger create dialog
+          break
+        case 'schema-editor':
+          setActiveTab('settings')
+          break
+      }
+    }
+    
+    // Levels menu
+    if (menu === 'levels') {
+      switch (action) {
+        case 'new-level':
+          setActiveTab('levels')
+          setShowGenerator(true)
+          break
+        case 'generate-ai':
+          setActiveTab('levels')
+          setShowGenerator(true)
+          break
+        case 'level-settings':
+          setActiveTab('settings')
+          break
+      }
+    }
+    
+    // AI menu
+    if (menu === 'ai') {
+      switch (action) {
+        case 'gen-level':
+          setActiveTab('levels')
+          setShowGenerator(true)
+          break
+        case 'model-settings':
+        case 'api-config':
+          setActiveTab('ai-tools')
+          break
+        case 'history':
+          setActiveTab('ai-tools')
+          break
+      }
+    }
+    
+    // Tools menu
+    if (menu === 'tools') {
+      switch (action) {
+        case 'json-viewer':
+          logToConsole('JSON Viewer coming soon...', 'info')
+          break
+        case 'plugin-manager':
+          logToConsole('Plugin Manager coming soon...', 'info')
+          break
+      }
+    }
+    
+    // Help menu
+    if (menu === 'help') {
+      switch (action) {
+        case 'documentation':
+          window.open('https://docs.openclaw.ai/levelforge', '_blank')
+          break
+        case 'shortcuts':
+          alert(`Keyboard Shortcuts:
+          
+Ctrl+1-6: Switch tabs
+Ctrl+I: Toggle Inspector
+Ctrl+\`: Toggle Console
+Ctrl+G: Generate Level
+Ctrl+S: Save
+F11: Fullscreen
+Escape: Close menus`)
+          break
+        case 'report-issue':
+          window.open('https://github.com/kire256/levelforge/issues', '_blank')
+          break
+        case 'about':
+          alert(`LevelForge AI
+          
+AI-powered level generator for game developers.
+
+Version: 1.0.0
+Built with ❤️ by OpenClaw`)
+          break
+      }
+    }
+  }
+  
+  // Render active tab content
+  const renderContent = () => {
+    switch (activeTab) {
+      case 'dashboard':
+        return (
+          <Dashboard
+            projects={projects}
+            currentProject={currentProject}
+            onSelectProject={handleSelectProject}
+            onCreateProject={handleCreateProject}
+            onGenerateLevel={() => {
+              if (!currentProject) {
+                alert('Please select a project first')
+                return
+              }
+              setActiveTab('levels')
+            }}
+          />
+        )
+      case 'entities':
+        return (
+          <Entities
+            entityTypes={entityTypes}
+            currentProject={currentProject}
+            onCreateEntityType={handleCreateEntityType}
+            onUpdateEntityType={handleUpdateEntityType}
+            onDeleteEntityType={handleDeleteEntityType}
+            onSelectEntity={handleSelectEntity}
+            onEditEntity={handleEditEntity}
+            selectedEntity={selectedItem}
+          />
+        )
+      case 'levels':
+        return (
+          <Levels
+            currentProject={currentProject}
+            levels={levels}
+            currentLevel={currentLevel}
+            onSelectLevel={handleSelectLevel}
+            onGenerateLevel={handleGenerateLevel}
+            generating={generating}
+            progress={progress}
+            progressMessage={progressMessage}
+            availableModels={availableModels}
+            selectedModel={selectedModel}
+            onModelChange={handleModelChange}
+            showGenerator={showGenerator}
+            onShowGeneratorChange={setShowGenerator}
+          />
+        )
+      case 'library':
+        return (
+          <Library 
+            currentProject={currentProject}
+            onSelectAsset={handleSelectAsset}
+            selectedAsset={selectedItem}
+          />
+        )
+      case 'ai-tools':
+        return (
+          <AITools
+            availableModels={availableModels}
+            selectedModel={selectedModel}
+            onModelChange={handleModelChange}
+            consoleLogs={consoleLogs}
+          />
+        )
+      case 'settings':
+        return (
+          <Settings
+            currentProject={currentProject}
+            availableModels={availableModels}
+            selectedModel={selectedModel}
+            onModelChange={handleModelChange}
+            theme={theme}
+            accentColor={accentColor}
+            onThemeChange={setTheme}
+            onAccentChange={setAccentColor}
+          />
+        )
+      default:
+        return null
+    }
+  }
+  
+  return (
+    <Layout
+      activeTab={activeTab}
+      onTabChange={setActiveTab}
+      onMenuAction={handleMenuAction}
+      selectedItem={selectedItem}
+      inspectorContent={editingEntity ? renderEntityEditForm() : inspectorContent}
+      consoleLogs={consoleLogs}
+      onClearConsole={handleClearConsole}
+      onEditItem={handleEditEntity}
+      recentProjects={recentProjects}
+      projects={projects}
+      showProjectModal={showProjectModal}
+      onCloseProjectModal={handleCloseProjectModal}
+      onSelectProject={handleSelectProject}
+      forceShowConsole={forceShowConsole}
+      onConsoleShown={() => setForceShowConsole(false)}
+    >
+      {renderContent()}
+    </Layout>
   )
 }
 

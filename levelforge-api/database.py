@@ -40,6 +40,24 @@ def init_db():
         )
     """)
     
+    # Custom entity types per project
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS entity_types (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            emoji TEXT DEFAULT '📦',
+            color TEXT DEFAULT '#6366f1',
+            description TEXT,
+            placement_rules TEXT,
+            behavior TEXT,
+            collision_type TEXT DEFAULT 'neutral',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            FOREIGN KEY (project_id) REFERENCES projects (id) ON DELETE CASCADE
+        )
+    """)
+    
     conn.commit()
     conn.close()
 
@@ -201,6 +219,142 @@ def delete_level(level_id: int) -> bool:
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("DELETE FROM levels WHERE id = ?", (level_id,))
+    conn.commit()
+    success = cursor.rowcount > 0
+    conn.close()
+    return success
+
+
+# Entity Type operations
+def create_entity_type(
+    project_id: int,
+    name: str,
+    emoji: str = '📦',
+    color: str = '#6366f1',
+    description: str = None,
+    placement_rules: str = None,
+    behavior: str = None,
+    collision_type: str = 'neutral',
+    metadata_fields: str = '[]'
+) -> int:
+    """Create a new entity type for a project."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    now = datetime.now().isoformat()
+    
+    cursor.execute("""
+        INSERT INTO entity_types 
+        (project_id, name, emoji, color, description, placement_rules, behavior, collision_type, metadata_fields, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (project_id, name, emoji, color, description, placement_rules, behavior, collision_type, metadata_fields, now, now))
+    
+    entity_type_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    return entity_type_id
+
+
+def get_entity_types(project_id: int) -> list:
+    """Get all entity types for a project."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT id, project_id, name, emoji, color, description, placement_rules, behavior, collision_type, metadata_fields, created_at, updated_at
+        FROM entity_types WHERE project_id = ? ORDER BY name
+    """, (project_id,))
+    rows = cursor.fetchall()
+    conn.close()
+    return [
+        {
+            "id": r[0], "project_id": r[1], "name": r[2], "emoji": r[3], "color": r[4],
+            "description": r[5], "placement_rules": r[6], "behavior": r[7], "collision_type": r[8],
+            "metadata_fields": r[9], "created_at": r[10], "updated_at": r[11]
+        }
+        for r in rows
+    ]
+
+
+def get_entity_type(entity_type_id: int) -> dict:
+    """Get a single entity type by ID."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT id, project_id, name, emoji, color, description, placement_rules, behavior, collision_type, metadata_fields, created_at, updated_at
+        FROM entity_types WHERE id = ?
+    """, (entity_type_id,))
+    row = cursor.fetchone()
+    conn.close()
+    if row:
+        return {
+            "id": row[0], "project_id": row[1], "name": row[2], "emoji": row[3], "color": row[4],
+            "description": row[5], "placement_rules": row[6], "behavior": row[7], "collision_type": row[8],
+            "metadata_fields": row[9], "created_at": row[10], "updated_at": row[11]
+        }
+    return None
+
+
+def update_entity_type(
+    entity_type_id: int,
+    name: str = None,
+    emoji: str = None,
+    color: str = None,
+    description: str = None,
+    placement_rules: str = None,
+    behavior: str = None,
+    collision_type: str = None,
+    metadata_fields: str = None
+) -> bool:
+    """Update an entity type."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    now = datetime.now().isoformat()
+    
+    updates = []
+    params = []
+    if name is not None:
+        updates.append("name = ?")
+        params.append(name)
+    if emoji is not None:
+        updates.append("emoji = ?")
+        params.append(emoji)
+    if color is not None:
+        updates.append("color = ?")
+        params.append(color)
+    if description is not None:
+        updates.append("description = ?")
+        params.append(description)
+    if placement_rules is not None:
+        updates.append("placement_rules = ?")
+        params.append(placement_rules)
+    if behavior is not None:
+        updates.append("behavior = ?")
+        params.append(behavior)
+    if collision_type is not None:
+        updates.append("collision_type = ?")
+        params.append(collision_type)
+    if metadata_fields is not None:
+        updates.append("metadata_fields = ?")
+        params.append(metadata_fields)
+    
+    if not updates:
+        return False
+    
+    updates.append("updated_at = ?")
+    params.append(now)
+    params.append(entity_type_id)
+    
+    cursor.execute(f"UPDATE entity_types SET {', '.join(updates)} WHERE id = ?", params)
+    conn.commit()
+    success = cursor.rowcount > 0
+    conn.close()
+    return success
+
+
+def delete_entity_type(entity_type_id: int) -> bool:
+    """Delete an entity type."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM entity_types WHERE id = ?", (entity_type_id,))
     conn.commit()
     success = cursor.rowcount > 0
     conn.close()

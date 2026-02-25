@@ -1,12 +1,13 @@
 """
 LevelForge AI - LLM client wrapper.
-Supports OpenAI Codex, z.ai (GLM), and Ollama.
+Supports OpenAI Codex, z.ai (GLM), Google Gemini, and Ollama.
 """
 
 import os
 from typing import Optional
 from abc import ABC, abstractmethod
 import json
+import requests
 
 # Try importing openai - will be installed via requirements.txt
 try:
@@ -14,6 +15,13 @@ try:
     OPENAI_AVAILABLE = True
 except ImportError:
     OPENAI_AVAILABLE = False
+
+# Try importing google-generativeai
+try:
+    import google.generativeai as genai
+    GEMINI_AVAILABLE = True
+except ImportError:
+    GEMINI_AVAILABLE = False
 
 
 class LLMClient(ABC):
@@ -31,17 +39,20 @@ class LLMClient(ABC):
 
 
 class OpenAIClient(LLMClient):
-    """OpenAI API client ( Codex, GPT-4)."""
+    """OpenAI API client (Codex, GPT-4, GPT-3.5)."""
     
     def __init__(self, api_key: Optional[str] = None, base_url: Optional[str] = None):
         if not OPENAI_AVAILABLE:
             raise ImportError("openai package not installed")
         
         self.api_key = api_key or os.environ.get("OPENAI_API_KEY")
-        self.client = OpenAI(api_key=self.api_key, base_url=base_url)
+        self.client = OpenAI(api_key=self.api_key, base_url=base_url) if self.api_key else None
     
     def generate(self, prompt: str, model: str = "gpt-4o", **kwargs) -> str:
         """Generate using OpenAI API."""
+        if not self.client:
+            raise ValueError("OpenAI client not initialized - API key required")
+        
         response = self.client.chat.completions.create(
             model=model,
             messages=[{"role": "user", "content": prompt}],
@@ -51,6 +62,41 @@ class OpenAIClient(LLMClient):
     
     def is_available(self) -> bool:
         """Check if OpenAI is available."""
+        return bool(self.api_key) and self.client is not None
+
+
+class GeminiClient(LLMClient):
+    """Google Gemini API client."""
+    
+    def __init__(self, api_key: Optional[str] = None):
+        if not GEMINI_AVAILABLE:
+            raise ImportError("google-generativeai package not installed")
+        
+        self.api_key = api_key or os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")
+        if self.api_key:
+            genai.configure(api_key=self.api_key)
+    
+    def generate(self, prompt: str, model: str = "gemini-pro", **kwargs) -> str:
+        """Generate using Google Gemini API."""
+        if not self.api_key:
+            raise ValueError("Gemini client not initialized - API key required")
+        
+        # Map model names
+        model_map = {
+            "gemini-pro": "gemini-pro",
+            "gemini-pro-vision": "gemini-pro-vision",
+            "gemini-1.5-flash": "gemini-1.5-flash",
+            "gemini-1.5-pro": "gemini-1.5-pro",
+        }
+        
+        model_name = model_map.get(model, model)
+        genai_model = genai.GenerativeModel(model_name)
+        
+        response = genai_model.generate_content(prompt)
+        return response.text
+    
+    def is_available(self) -> bool:
+        """Check if Gemini is available."""
         return bool(self.api_key)
 
 
@@ -60,10 +106,13 @@ class ZAIClient(LLMClient):
     def __init__(self, api_key: Optional[str] = None, base_url: str = "https://open.bigmodel.cn/api/paas/v4"):
         self.api_key = api_key or os.environ.get("ZAI_API_KEY")
         self.base_url = base_url
-        self.client = OpenAI(api_key=self.api_key, base_url=base_url)
+        self.client = OpenAI(api_key=self.api_key, base_url=base_url) if self.api_key else None
     
-    def generate(self, prompt: str, model: str = "glm-5", **kwargs) -> str:
+    def generate(self, prompt: str, model: str = "glm-4-flash", **kwargs) -> str:
         """Generate using z.ai GLM API."""
+        if not self.client:
+            raise ValueError("Z-AI client not initialized - API key required")
+        
         response = self.client.chat.completions.create(
             model=model,
             messages=[{"role": "user", "content": prompt}],
@@ -73,7 +122,7 @@ class ZAIClient(LLMClient):
     
     def is_available(self) -> bool:
         """Check if z.ai is available."""
-        return bool(self.api_key)
+        return bool(self.api_key) and self.client is not None
 
 
 class OllamaClient(LLMClient):
@@ -84,8 +133,6 @@ class OllamaClient(LLMClient):
     
     def generate(self, prompt: str, model: str = "llama3", **kwargs) -> str:
         """Generate using local Ollama."""
-        import requests
-        
         response = requests.post(
             f"{self.base_url}/api/generate",
             json={
@@ -99,7 +146,6 @@ class OllamaClient(LLMClient):
     
     def is_available(self) -> bool:
         """Check if Ollama is running."""
-        import requests
         try:
             response = requests.get(f"{self.base_url}/api/tags", timeout=2)
             return response.status_code == 200
@@ -108,7 +154,6 @@ class OllamaClient(LLMClient):
     
     def list_models(self) -> list[str]:
         """List available Ollama models."""
-        import requests
         try:
             response = requests.get(f"{self.base_url}/api/tags", timeout=5)
             return [m["name"] for m in response.json().get("models", [])]
@@ -125,6 +170,8 @@ class LLMFactory:
         clients = {
             "openai": OpenAIClient,
             "codex": OpenAIClient,
+            "gemini": GeminiClient,
+            "google": GeminiClient,
             "z-ai": ZAIClient,
             "glm": ZAIClient,
             "ollama": OllamaClient,
@@ -148,7 +195,15 @@ class LLMFactory:
         except:
             pass
         
-        # 2. Try z.ai
+        # 2. Try Gemini
+        try:
+            client = GeminiClient()
+            if client.is_available():
+                return client
+        except:
+            pass
+        
+        # 3. Try z.ai
         try:
             client = ZAIClient()
             if client.is_available():
@@ -156,7 +211,7 @@ class LLMFactory:
         except:
             pass
         
-        # 3. Try Ollama (local)
+        # 4. Try Ollama (local)
         try:
             client = OllamaClient()
             if client.is_available():

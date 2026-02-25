@@ -1,0 +1,507 @@
+/* PlaceholderPages.css - Shared styles for Library and AI Tools */
+
+/* Library Page */
+.library-page,
+.ai-tools-page {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  height: calc(100vh - 84px);
+  background: var(--bg-main);
+}
+
+/* Sub-navigation (shared with Entities) */
+.sub-nav {
+  background: var(--header-bg);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+}
+
+.sub-nav-header {
+  padding: 16px 12px 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.sub-nav-header h3 {
+  margin: 0;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+}
+
+.sub-nav-list {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 4px;
+}
+
+.sub-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  padding: 10px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  text-align: left;
+  margin: 2px 4px;
+}
+
+.sub-nav-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.sub-nav-item.active {
+  background: var(--tab-active);
+  color: var(--text-primary);
+}
+
+.sub-nav-icon {
+  font-size: 1rem;
+}
+
+.sub-nav-label {
+  flex: 1;
+}
+
+/* Main Area */
+.main-area {
+  display: flex;
+  flex-direction: column;
+  background: var(--tab-bg);
+  overflow: hidden;
+}
+
+/* Toolbar */
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: var(--header-bg);
+  border-bottom: 1px solid var(--border);
+}
+
+.toolbar h2 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 500;
+}
+
+.toolbar-left {
+  display: flex;
+  gap: 12px;
+}
+
+.toolbar-right {
+  display: flex;
+  gap: 8px;
+}
+
+.search-input {
+  width: 280px;
+  background: var(--tab-active);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 12px;
+  color: var(--text-primary);
+  font-size: 0.85rem;
+}
+
+.search-input::placeholder {
+  color: var(--text-secondary);
+}
+
+/* Buttons */
+.btn-primary {
+  background: var(--accent);
+  border: none;
+  border-radius: 6px;
+  padding: 8px 16px;
+  color: white;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.btn-primary:hover {
+  background: var(--accent-hover);
+}
+
+.btn-secondary {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 16px;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.btn-secondary:hover {
+  border-color: var(--text-secondary);
+  color: var(--text-primary);
+}
+
+/* Data Grid */
+.data-grid-container {
+  flex: 1;
+  overflow: auto;
+  padding: 8px;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  text-align: center;
+  padding: 40px;
+}
+
+.empty-state .empty-icon {
+  font-size: 3rem;
+  margin-bottom: 16px;
+}
+
+.empty-state h3 {
+  margin: 0 0 8px 0;
+  font-weight: 500;
+}
+
+.empty-state p {
+  color: var(--text-secondary);
+  margin-bottom: 20px;
+}
+
+.data-grid {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.data-grid th {
+  background: var(--header-bg);
+  padding: 10px 12px;
+  text-align: left;
+  font-weight: 500;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border);
+}
+
+.data-grid td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-primary);
+}
+
+.data-grid tr:hover {
+  background: var(--bg-hover);
+}
+
+.data-grid tr.selected {
+  background: rgba(99, 102, 241, 0.1);
+  border-left: 3px solid var(--accent);
+}
+
+.data-grid tr.selected td:first-child {
+  padding-left: 9px;
+}
+
+.col-actions {
+  text-align: right;
+}
+
+.action-btn {
+  background: transparent;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+/* Badges */
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 0.7rem;
+  font-weight: 500;
+  background: rgba(99, 102, 241, 0.15);
+  color: var(--accent);
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 0.75rem;
+}
+
+.status-badge.success {
+  background: rgba(34, 197, 94, 0.15);
+  color: var(--success);
+}
+
+.status-badge.failed {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--danger);
+}
+
+/* No Project State */
+.no-project-state {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.no-project-state .empty-icon {
+  font-size: 3rem;
+  margin-bottom: 16px;
+}
+
+.no-project-state h2 {
+  margin: 0 0 8px 0;
+}
+
+.no-project-state p {
+  color: var(--text-secondary);
+}
+
+/* Prompt Editor */
+.prompt-editor {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.editor-area {
+  flex: 1;
+  padding: 16px;
+}
+
+.prompt-textarea {
+  width: 100%;
+  height: 100%;
+  min-height: 300px;
+  background: var(--bg-main);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  color: var(--text-primary);
+  font-family: 'SF Mono', 'Monaco', monospace;
+  font-size: 0.9rem;
+  resize: none;
+}
+
+.prompt-textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.prompt-suggestions {
+  padding: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.prompt-suggestions h4 {
+  margin: 0 0 12px 0;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.suggestions-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.suggestions-list button {
+  background: var(--tab-active);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 12px;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.suggestions-list button:hover {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+/* Model Settings */
+.model-settings {
+  padding: 16px;
+}
+
+.settings-form {
+  max-width: 500px;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.form-group input[type="text"],
+.form-group input[type="number"],
+.form-group select {
+  width: 100%;
+  background: var(--tab-active);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+}
+
+.form-group input[type="range"] {
+  width: 100%;
+}
+
+.form-group .hint {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-top: 6px;
+}
+
+/* Toggle */
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.toggle input {
+  display: none;
+}
+
+.toggle-slider {
+  width: 40px;
+  height: 22px;
+  background: var(--tab-active);
+  border-radius: 11px;
+  position: relative;
+  transition: background 0.2s;
+}
+
+.toggle-slider::after {
+  content: '';
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  background: var(--text-secondary);
+  border-radius: 50%;
+  top: 3px;
+  left: 3px;
+  transition: all 0.2s;
+}
+
+.toggle input:checked + .toggle-slider {
+  background: var(--accent);
+}
+
+.toggle input:checked + .toggle-slider::after {
+  left: 21px;
+  background: white;
+}
+
+/* Status Section */
+.status-section {
+  margin-bottom: 20px;
+}
+
+.status-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.status-label {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.status-value {
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.status-value.success {
+  color: var(--success);
+}
+
+.recent-activity h4 {
+  margin: 0 0 12px 0;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.activity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.activity-item {
+  font-size: 0.8rem;
+  padding: 6px 8px;
+  background: var(--tab-active);
+  border-radius: 4px;
+  display: flex;
+  gap: 10px;
+}
+
+.activity-time {
+  color: var(--text-secondary);
+  min-width: 50px;
+}
+
+.activity-msg {
+  flex: 1;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.activity-item.success .activity-msg { color: var(--success); }
+.activity-item.error .activity-msg { color: var(--danger); }
+.activity-item.warning .activity-msg { color: var(--warning); }
+
+.hint {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+/* Generation History */
+.generation-history {
+  padding: 16px;
+}
+
+.generation-history .toolbar {
+  margin: -16px -16px 16px;
+}

@@ -197,6 +197,9 @@ class ResponseParser:
         if not json_str:
             return None
         
+        # Fix duplicate keys (common LLM issue - merge arrays)
+        json_str = ResponseParser._merge_duplicate_arrays(json_str)
+        
         # Fix common issues
         fixes = [
             # Remove trailing commas
@@ -212,6 +215,49 @@ class ResponseParser:
         
         for pattern, replacement in fixes:
             json_str = re.sub(pattern, replacement, json_str)
+        
+        return json_str
+    
+    @staticmethod
+    def _merge_duplicate_arrays(json_str: str) -> str:
+        """Merge duplicate array keys (common LLM issue)."""
+        # Find all keys that appear multiple times
+        import collections
+        
+        # Parse key positions
+        key_pattern = r'"([^"]+)"\s*:'
+        keys = re.findall(key_pattern, json_str)
+        
+        # Find duplicates
+        counter = collections.Counter(keys)
+        duplicates = [k for k, v in counter.items() if v > 1 and k in ['entities', 'platforms', 'goals', 'gates']]
+        
+        if not duplicates:
+            return json_str
+        
+        # For each duplicate key, merge the arrays
+        for dup_key in duplicates:
+            # Find all array values for this key
+            pattern = rf'"{dup_key}"\s*:\s*\[(.*?)\](?=\s*[,}}])'
+            matches = re.findall(pattern, json_str, re.DOTALL)
+            
+            if len(matches) > 1:
+                # Merge all arrays into one
+                merged_array = ', '.join(matches)
+                
+                # Replace all occurrences with a single merged array
+                # Find the first occurrence
+                first_match = re.search(rf'("{dup_key}"\s*:\s*)\[(.*?)\]', json_str, re.DOTALL)
+                if first_match:
+                    # Keep only the first occurrence with merged content
+                    json_str = (
+                        json_str[:first_match.start()] + 
+                        f'"{dup_key}": [{merged_array}]' +
+                        json_str[first_match.end():]
+                    )
+                    
+                    # Remove remaining duplicate keys
+                    json_str = re.sub(rf',\s*"{dup_key}"\s*:\s*\[.*?\]', '', json_str, flags=re.DOTALL)
         
         return json_str
     
