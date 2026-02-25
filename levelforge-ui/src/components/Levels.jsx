@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import LevelView from './LevelView'
+import EntityRequirements from './EntityRequirements'
 import './Levels.css'
 
 const GENRES = [
@@ -40,6 +41,20 @@ export default function Levels({
   const [difficulty, setDifficulty] = useState('medium')
   const [theme, setTheme] = useState('')
   const [requirements, setRequirements] = useState('')
+  const [entityRequirements, setEntityRequirements] = useState([])
+  const [entityRequirements, setEntityRequirements] = useState([])
+  
+  // Load entity types when project changes
+  const [entityTypes, setEntityTypes] = useState([])
+  
+  useEffect(() => {
+    if (currentProject) {
+      fetch(`http://192.168.68.72:8000/api/projects/${currentProject.id}/entity-types`)
+        .then(res => res.json())
+        .then(data => setEntityTypes(data))
+        .catch(err => console.error('Failed to load entity types:', err))
+    }
+  }, [currentProject])
 
   useEffect(() => {
     if (externalViewMode !== undefined) setViewMode(externalViewMode)
@@ -90,12 +105,48 @@ export default function Levels({
   }
 
   const handleGenerate = () => {
+    // Format entity requirements into prompt
+    let entityReqsText = ''
+    if (entityRequirements.length > 0) {
+      entityReqsText = '\n\nEntity Requirements:\n'
+      entityRequirements.forEach(req => {
+        if (req.entityType && req.count > 0) {
+          entityReqsText += `- ${req.count}x ${req.entityType.name}`
+          if (req.placement) {
+            entityReqsText += `: ${req.placement}`
+          }
+          entityReqsText += '\n'
+        }
+      })
+    }
+    
+    const fullRequirements = (requirements || 'Create an engaging level') + entityReqsText
+    
     onGenerateLevel({
       genre,
       difficulty,
       theme: theme || 'default',
-      requirements: requirements || 'Create an engaging level'
+      requirements: fullRequirements
     })
+  }
+  
+  const addEntityRequirement = () => {
+    setEntityRequirements([...entityRequirements, {
+      id: Date.now(),
+      entityType: null,
+      count: 1,
+      placement: ''
+    }])
+  }
+  
+  const removeEntityRequirement = (id) => {
+    setEntityRequirements(entityRequirements.filter(req => req.id !== id))
+  }
+  
+  const updateEntityRequirement = (id, field, value) => {
+    setEntityRequirements(entityRequirements.map(req => 
+      req.id === id ? { ...req, [field]: value } : req
+    ))
   }
 
   if (!currentProject) {
@@ -272,6 +323,12 @@ export default function Levels({
                       />
                     </div>
                   </div>
+
+                  <EntityRequirements 
+                    entityTypes={entityTypes || []}
+                    requirements={entityRequirements}
+                    onRequirementsChange={setEntityRequirements}
+                  />
 
                   <button className="generate-btn" onClick={handleGenerate} disabled={generating}>
                     {generating ? '🎲 Generating...' : '🚀 Generate Level'}
