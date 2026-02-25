@@ -1,0 +1,320 @@
+/* LevelView.css - Level visualization and editing */
+
+.level-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--bg-main);
+}
+
+.level-view-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  text-align: center;
+  padding: 60px 20px;
+}
+
+.level-view-empty .empty-icon {
+  font-size: 4rem;
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+
+.level-view-empty h3 {
+  margin: 0 0 8px 0;
+  font-size: 1.2rem;
+}
+
+.level-view-empty p {
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+/* View Mode Bar */
+.view-mode-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: var(--header-bg);
+  border-bottom: 1px solid var(--border);
+}
+
+.view-mode-tabs {
+  display: flex;
+  gap: 4px;
+}
+
+.view-tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 16px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: all 0.15s;
+}
+
+.view-tab:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.view-tab.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
+.view-tab:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.badge-coming-soon {
+  font-size: 0.7rem;
+  padding: 2px 6px;
+  background: rgba(99, 102, 241, 0.2);
+  border-radius: 4px;
+  color: var(--accent);
+}
+
+.view-tab.active .badge-coming-soon {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+}
+
+/* View Controls */
+.view-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.view-controls button {
+  background: var(--tab-active);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.view-controls button:hover {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.zoom-level {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  min-width: 50px;
+  text-align: center;
+}
+
+/* Canvas Container */
+.canvas-container {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.level-canvas {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: grab;
+}
+
+.level-canvas:active {
+  cursor: grabbing;
+}
+
+/* Draft View Elements */
+.draft-legend {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  background: rgba(15, 15, 26, 0.9);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 16px;
+  backdrop-filter: blur(8px);
+  min-width: 140px;
+}
+
+.draft-legend h4 {
+  margin: 0 0 8px 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+}
+
+.legend-items {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  color: var(--text-primary);
+}
+
+.legend-item span:first-child {
+  font-size: 1rem;
+  width: 20px;
+  text-align: center;
+}
+
+/* Level Info Panel */
+.level-info-panel {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: rgba(15, 15, 26, 0.9);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 16px;
+  backdrop-filter: blur(8px);
+  min-width: 180px;
+}
+
+.level-info-panel h4 {
+  margin: 0 0 12px 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.info-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 0.8rem;
+}
+
+.info-item:last-child {
+  margin-bottom: 0;
+}
+
+.info-label {
+  color: var(--text-secondary);
+}
+
+.info-value {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.diff-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 0.7rem;
+  font-weight: 500;
+}
+
+.diff-badge.easy {
+  background: rgba(34, 197, 94, 0.2);
+  color: var(--success);
+}
+
+.diff-badge.medium {
+  background: rgba(250, 204, 21, 0.2);
+  color: var(--warning);
+}
+
+.diff-badge.hard {
+  background: rgba(249, 115, 22, 0.2);
+  color: var(--warning);
+}
+
+.diff-badge.expert {
+  background: rgba(239, 68, 68, 0.2);
+  color: var(--danger);
+}
+
+/* View Stubs */
+.view-stub {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  text-align: center;
+  padding: 60px 20px;
+  background: var(--bg-main);
+}
+
+.view-stub .stub-icon {
+  font-size: 5rem;
+  margin-bottom: 24px;
+  opacity: 0.3;
+}
+
+.view-stub h3 {
+  margin: 0 0 12px 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.view-stub p {
+  color: var(--text-secondary);
+  margin: 0 0 8px 0;
+  max-width: 400px;
+}
+
+.view-stub .hint {
+  font-size: 0.85rem;
+  opacity: 0.7;
+  font-style: italic;
+}
+
+/* Responsive */
+@media (max-width: 1200px) {
+  .draft-legend,
+  .level-info-panel {
+    padding: 10px 12px;
+    min-width: 120px;
+  }
+  
+  .level-info-panel h4 {
+    font-size: 0.8rem;
+  }
+  
+  .info-item {
+    font-size: 0.75rem;
+  }
+}
+
+@media (max-width: 900px) {
+  .draft-legend,
+  .level-info-panel {
+    display: none;
+  }
+  
+  .view-mode-tabs {
+    flex-wrap: wrap;
+  }
+  
+  .view-tab {
+    font-size: 0.8rem;
+    padding: 6px 12px;
+  }
+}

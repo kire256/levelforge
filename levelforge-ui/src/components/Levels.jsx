@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import LevelView from './LevelView'
 import './Levels.css'
 
 // Genre options
@@ -165,21 +166,7 @@ export default function Levels({
         {viewMode === 'canvas' && (
           <div className="canvas-view">
             {currentLevel ? (
-              <div className="canvas-placeholder">
-                <div className="canvas-header-bar">
-                  <h3>{currentLevel.name}</h3>
-                  <div className="canvas-tools">
-                    <button className="tool-btn">🖱️ Select</button>
-                    <button className="tool-btn">✏️ Draw</button>
-                    <button className="tool-btn">📦 Place</button>
-                    <button className="tool-btn">🗑️ Erase</button>
-                  </div>
-                </div>
-                <div className="canvas-area">
-                  <p className="hint">Canvas editor coming soon...</p>
-                  <p>Drag and drop entities, pan/zoom, and edit level layout.</p>
-                </div>
-              </div>
+              <LevelView level={currentLevel} mode="draft" />
             ) : (
               <div className="no-selection">
                 <div className="empty-icon">🎨</div>
