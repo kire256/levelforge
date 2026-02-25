@@ -68,8 +68,17 @@ export default function LevelView({ level, mode = 'draft', onModeChange }) {
   const [zoom, setZoom] = useState(1)
   const [pan, setPan] = useState({ x: 0, y: 0 })
   
-  // Parse level data
-  const levelData = level?.level_data ? JSON.parse(level.level_data) : null
+  // Parse level data safely
+  let levelData = null
+  try {
+    if (level?.level_data) {
+      levelData = typeof level.level_data === 'string'
+        ? JSON.parse(level.level_data)
+        : level.level_data
+    }
+  } catch {
+    levelData = null
+  }
   
   // Update view mode when prop changes
   useEffect(() => {
