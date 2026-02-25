@@ -6,6 +6,7 @@ import Levels from './components/Levels'
 import Library from './components/Library'
 import AITools from './components/AITools'
 import Settings from './components/Settings'
+import { useUndoRedo } from './hooks/useUndoRedo'
 import './App.css'
 
 const API_BASE = 'http://192.168.68.72:8000'
@@ -64,6 +65,25 @@ function App() {
   // Model state
   const [availableModels, setAvailableModels] = useState({})
   const [selectedModel, setSelectedModel] = useState('')
+  
+  // Undo/Redo state - track current level with history
+  const {
+    state: levelWithHistory,
+    setState: setLevelWithHistory,
+    undo: undoLevel,
+    redo: redoLevel,
+    canUndo,
+    canRedo,
+    getHistoryInfo
+  } = useUndoRedo(currentLevel, { maxHistorySize: 50, debounceMs: 200 })
+  
+  // Wrap setCurrentLevel to also update history
+  const handleSetCurrentLevel = (level) => {
+    setCurrentLevel(level)
+    if (level) {
+      setLevelWithHistory(level, true)
+    }
+  }
   
   // Console logging helper
   const logToConsole = (message, type = 'info') => {
@@ -284,7 +304,7 @@ function App() {
                 logToConsole(`  → ${data.message} (${data.progress}%)`, 'ai-progress')
               } else if (data.event === 'result') {
                 const generatedLevel = data.level
-                setCurrentLevel(generatedLevel)
+                handleSetCurrentLevel(generatedLevel)
                 setProgress(100)
                 setProgressMessage('Done!')
                 await loadLevels(currentProject.id)
@@ -367,7 +387,7 @@ function App() {
   }
   
   const handleSelectLevel = (level) => {
-    setCurrentLevel(level)
+    handleSetCurrentLevel(level)
     setSelectedItem({ type: 'Level', ...level })
   }
 
@@ -385,7 +405,7 @@ function App() {
 
       await loadLevels(currentProject.id)
       const updated = { ...level, name: newName.trim() }
-      setCurrentLevel(updated)
+      handleSetCurrentLevel(updated)
       setSelectedItem({ type: 'Level', ...updated })
       logToConsole(`Renamed level to "${newName.trim()}"`, 'info')
     } catch (err) {
@@ -887,6 +907,11 @@ Built with ❤️ by OpenClaw`)
       onSelectProject={handleSelectProject}
       forceShowConsole={forceShowConsole}
       onConsoleShown={() => setForceShowConsole(false)}
+      canUndo={canUndo}
+      canRedo={canRedo}
+      onUndo={undoLevel}
+      onRedo={redoLevel}
+      historyInfo={getHistoryInfo()}
     >
       {renderContent()}
     </Layout>

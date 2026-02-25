@@ -1,0 +1,68 @@
+/* UndoRedoControls.css - Undo/Redo button styling */
+
+.undo-redo-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.undo-btn,
+.redo-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: all 0.15s;
+}
+
+.undo-btn:hover:not(.disabled),
+.redo-btn:hover:not(.disabled) {
+  border-color: var(--accent);
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.undo-btn.disabled,
+.redo-btn.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.undo-btn:active:not(.disabled),
+.redo-btn:active:not(.disabled) {
+  transform: scale(0.95);
+}
+
+.history-indicator {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  padding: 4px 8px;
+  background: var(--tab-active);
+  border-radius: 4px;
+  margin-left: 4px;
+}
+
+/* Compact mode for toolbar */
+.undo-redo-controls.compact .undo-btn,
+.undo-redo-controls.compact .redo-btn {
+  padding: 4px 8px;
+  font-size: 1.1rem;
+}
+
+/* Dark mode adjustments */
+[data-theme="dark"] .undo-btn:hover:not(.disabled),
+[data-theme="dark"] .redo-btn:hover:not(.disabled) {
+  background: rgba(99, 102, 241, 0.1);
+}
+
+/* Light mode adjustments */
+[data-theme="light"] .undo-btn:hover:not(.disabled),
+[data-theme="light"] .redo-btn:hover:not(.disabled) {
+  background: rgba(99, 102, 241, 0.05);
+}

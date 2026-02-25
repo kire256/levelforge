@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import UndoRedoControls from './UndoRedoControls'
 import './Layout.css'
 
 // Menu configurations (generated dynamically)
@@ -192,6 +193,11 @@ export default function Layout({
   onSelectProject,
   forceShowConsole = false,
   onConsoleShown,
+  canUndo = false,
+  canRedo = false,
+  onUndo,
+  onRedo,
+  historyInfo = null,
 }) {
   const [showInspector, setShowInspector] = useState(externalShowInspector ?? true)
   const [showConsole, setShowConsole] = useState(externalShowConsole ?? false)
