@@ -37,6 +37,7 @@ function App() {
   const [currentProject, setCurrentProject] = useState(null)
   const [levels, setLevels] = useState([])
   const [showProjectModal, setShowProjectModal] = useState(false)
+  const [levelViewMode, setLevelViewMode] = useState('ai') // 'list', 'canvas', or 'ai'
   const [recentProjects, setRecentProjects] = useState(() => {
     const saved = localStorage.getItem('levelforge-recent-projects')
     return saved ? JSON.parse(saved) : []
@@ -282,12 +283,17 @@ function App() {
                 setProgressMessage(data.message)
                 logToConsole(`  → ${data.message} (${data.progress}%)`, 'ai-progress')
               } else if (data.event === 'result') {
-                setCurrentLevel(data.level)
+                const generatedLevel = data.level
+                setCurrentLevel(generatedLevel)
                 setProgress(100)
                 setProgressMessage('Done!')
                 await loadLevels(currentProject.id)
                 logToConsole('✓ Level generated successfully!', 'success')
-                logToConsole(`Level ID: ${data.level.id}`, 'system')
+                logToConsole(`Level ID: ${generatedLevel.id}`, 'system')
+                
+                // Auto-switch to canvas view to show the generated level
+                setLevelViewMode('canvas')
+                setShowGenerator(false)
               } else if (data.event === 'error') {
                 logToConsole(`✗ Generation error: ${data.message}`, 'error')
                 alert(`Generation failed: ${data.message}`)
@@ -781,6 +787,8 @@ Built with ❤️ by OpenClaw`)
             onModelChange={handleModelChange}
             showGenerator={showGenerator}
             onShowGeneratorChange={setShowGenerator}
+            viewMode={levelViewMode}
+            onViewModeChange={setLevelViewMode}
           />
         )
       case 'library':

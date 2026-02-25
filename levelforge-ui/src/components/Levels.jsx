@@ -30,9 +30,11 @@ export default function Levels({
   selectedModel,
   onModelChange,
   showGenerator: externalShowGenerator,
-  onShowGeneratorChange
+  onShowGeneratorChange,
+  viewMode: externalViewMode,
+  onViewModeChange
 }) {
-  const [viewMode, setViewMode] = useState('ai') // Default to AI view
+  const [viewMode, setViewMode] = useState(externalViewMode ?? 'ai') // Default to AI view
   const [showGenerator, setShowGenerator] = useState(externalShowGenerator ?? false)
   
   // Generation settings
@@ -41,15 +43,29 @@ export default function Levels({
   const [theme, setTheme] = useState('')
   const [requirements, setRequirements] = useState('')
   
-  // Sync with external state
+  // Sync with external viewMode prop
+  useEffect(() => {
+    if (externalViewMode !== undefined) {
+      setViewMode(externalViewMode)
+    }
+  }, [externalViewMode])
+  
+  // Sync with external showGenerator state
   useEffect(() => {
     if (externalShowGenerator !== undefined) {
       setShowGenerator(externalShowGenerator)
       if (externalShowGenerator) {
         setViewMode('ai')
+        onViewModeChange && onViewModeChange('ai')
       }
     }
   }, [externalShowGenerator])
+  
+  // Handle view mode changes
+  const handleViewModeChange = (newMode) => {
+    setViewMode(newMode)
+    onViewModeChange && onViewModeChange(newMode)
+  }
   
   const handleGenerate = () => {
     onGenerateLevel({
@@ -90,9 +106,9 @@ export default function Levels({
           </div>
           <div className="toolbar-right">
             <div className="view-toggle">
-              <button className={viewMode === 'list' ? 'active' : ''} onClick={() => setViewMode('list')}>📋 List</button>
-              <button className={viewMode === 'canvas' ? 'active' : ''} onClick={() => setViewMode('canvas')}>🎨 Canvas</button>
-              <button className={viewMode === 'ai' ? 'active' : ''} onClick={() => setViewMode('ai')}>🤖 AI</button>
+              <button className={viewMode === 'list' ? 'active' : ''} onClick={() => handleViewModeChange('list')}>📋 List</button>
+              <button className={viewMode === 'canvas' ? 'active' : ''} onClick={() => handleViewModeChange('canvas')}>🎨 Canvas</button>
+              <button className={viewMode === 'ai' ? 'active' : ''} onClick={() => handleViewModeChange('ai')}>🤖 AI</button>
             </div>
           </div>
         </div>
