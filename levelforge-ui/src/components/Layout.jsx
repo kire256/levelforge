@@ -183,6 +183,8 @@ export default function Layout({
   onToggleInspector,
   onToggleConsole,
   onEditItem,
+  onRenameLevel,
+  onDeleteLevel,
   recentProjects = [],
   projects = [],
   showProjectModal,
@@ -472,19 +474,31 @@ export default function Layout({
             <aside className="inspector-panel">
               <div className="panel-header">
                 <h3>Inspector</h3>
-                {selectedItem && selectedItem.type === 'Entity' && !inspectorContent && onEditItem && (
-                  <button className="btn-small" onClick={() => onEditItem(selectedItem)}>Edit</button>
-                )}
-                <button 
-                  className="panel-close" 
-                  onClick={() => {
-                    setShowInspector(false)
-                    onToggleInspector && onToggleInspector()
-                  }}
-                  title="Close (Ctrl+I)"
-                >
-                  ×
-                </button>
+                <div className="panel-header-actions">
+                  {selectedItem && selectedItem.type === 'Entity' && !inspectorContent && onEditItem && (
+                    <button className="btn-small" onClick={() => onEditItem(selectedItem)}>Edit</button>
+                  )}
+                  {selectedItem && selectedItem.type === 'Level' && !inspectorContent && (
+                    <>
+                      {onRenameLevel && (
+                        <button className="btn-small" onClick={() => onRenameLevel(selectedItem)}>Rename</button>
+                      )}
+                      {onDeleteLevel && (
+                        <button className="btn-small btn-danger" onClick={() => onDeleteLevel(selectedItem)}>Delete</button>
+                      )}
+                    </>
+                  )}
+                  <button 
+                    className="panel-close" 
+                    onClick={() => {
+                      setShowInspector(false)
+                      onToggleInspector && onToggleInspector()
+                    }}
+                    title="Close (Ctrl+I)"
+                  >
+                    ×
+                  </button>
+                </div>
               </div>
               <div className="panel-content">
                 {inspectorContent ? (

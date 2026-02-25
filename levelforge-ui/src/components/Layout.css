@@ -924,6 +924,12 @@ html, body, #root {
 }
 
 /* Small button for panel headers */
+.panel-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .btn-small {
   background: var(--accent);
   border: none;
@@ -937,6 +943,14 @@ html, body, #root {
 
 .btn-small:hover {
   background: var(--accent-hover);
+}
+
+.btn-small.btn-danger {
+  background: var(--danger);
+}
+
+.btn-small.btn-danger:hover {
+  background: #dc2626;
 }
 
 /* Modal Styles */

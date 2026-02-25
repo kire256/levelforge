@@ -370,6 +370,48 @@ function App() {
     setCurrentLevel(level)
     setSelectedItem({ type: 'Level', ...level })
   }
+
+  const handleRenameLevel = async (level) => {
+    const newName = prompt('Rename level:', level?.name || '')
+    if (!newName || !newName.trim() || newName.trim() === level.name) return
+
+    try {
+      const res = await fetch(`${API_BASE}/api/levels/${level.id}/rename`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newName.trim() })
+      })
+      if (!res.ok) throw new Error('Failed to rename level')
+
+      await loadLevels(currentProject.id)
+      const updated = { ...level, name: newName.trim() }
+      setCurrentLevel(updated)
+      setSelectedItem({ type: 'Level', ...updated })
+      logToConsole(`Renamed level to "${newName.trim()}"`, 'info')
+    } catch (err) {
+      console.error('Rename level failed:', err)
+      logToConsole('Failed to rename level', 'error')
+      alert('Failed to rename level')
+    }
+  }
+
+  const handleDeleteLevel = async (level) => {
+    if (!confirm(`Delete level "${level?.name}"? This cannot be undone.`)) return
+
+    try {
+      const res = await fetch(`${API_BASE}/api/levels/${level.id}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error('Failed to delete level')
+
+      await loadLevels(currentProject.id)
+      if (currentLevel?.id === level.id) setCurrentLevel(null)
+      if (selectedItem?.id === level.id && selectedItem?.type === 'Level') setSelectedItem(null)
+      logToConsole(`Deleted level "${level.name}"`, 'info')
+    } catch (err) {
+      console.error('Delete level failed:', err)
+      logToConsole('Failed to delete level', 'error')
+      alert('Failed to delete level')
+    }
+  }
   
   const handleSelectEntity = (entity) => {
     setSelectedItem({ type: 'Entity', ...entity })
@@ -836,6 +878,8 @@ Built with ❤️ by OpenClaw`)
       consoleLogs={consoleLogs}
       onClearConsole={handleClearConsole}
       onEditItem={handleEditEntity}
+      onRenameLevel={handleRenameLevel}
+      onDeleteLevel={handleDeleteLevel}
       recentProjects={recentProjects}
       projects={projects}
       showProjectModal={showProjectModal}

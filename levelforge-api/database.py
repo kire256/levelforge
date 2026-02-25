@@ -214,11 +214,44 @@ def update_level(level_id: int, level_data: str) -> bool:
     return True
 
 
+def rename_level(level_id: int, name: str) -> bool:
+    """Rename a level and bump updated_at."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    now = datetime.now().isoformat()
+
+    cursor.execute("SELECT project_id FROM levels WHERE id = ?", (level_id,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return False
+
+    project_id = row[0]
+    cursor.execute("UPDATE levels SET name = ?, updated_at = ? WHERE id = ?", (name, now, level_id))
+    cursor.execute("UPDATE projects SET updated_at = ? WHERE id = ?", (now, project_id))
+
+    conn.commit()
+    success = cursor.rowcount > 0
+    conn.close()
+    return success
+
+
 def delete_level(level_id: int) -> bool:
     """Delete a level."""
     conn = get_connection()
     cursor = conn.cursor()
+
+    cursor.execute("SELECT project_id FROM levels WHERE id = ?", (level_id,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return False
+
+    project_id = row[0]
     cursor.execute("DELETE FROM levels WHERE id = ?", (level_id,))
+    now = datetime.now().isoformat()
+    cursor.execute("UPDATE projects SET updated_at = ? WHERE id = ?", (now, project_id))
+
     conn.commit()
     success = cursor.rowcount > 0
     conn.close()

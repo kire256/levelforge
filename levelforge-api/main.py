@@ -643,13 +643,33 @@ async def get_levels(project_id: int):
 
 
 @app.get("/api/levels/{level_id}")
-async def get_level(level_id: int):
+async def get_level_by_id(level_id: int):
     """Get a single level with full data."""
     from database import get_level
     level = get_level(level_id)
     if not level:
         raise HTTPException(status_code=404, detail="Level not found")
     return level
+
+
+class RenameLevelRequest(BaseModel):
+    name: str
+
+
+@app.post("/api/levels/{level_id}/rename")
+async def rename_level(level_id: int, request: RenameLevelRequest):
+    """Rename a level."""
+    from database import rename_level, get_level
+
+    if not request.name or not request.name.strip():
+        raise HTTPException(status_code=400, detail="Name cannot be empty")
+
+    success = rename_level(level_id, request.name.strip())
+    if not success:
+        raise HTTPException(status_code=404, detail="Level not found")
+
+    level = get_level(level_id)
+    return {"success": True, "level": level}
 
 
 @app.put("/api/levels/{level_id}")
