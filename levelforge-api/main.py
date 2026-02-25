@@ -638,7 +638,7 @@ async def get_levels(project_id: int):
     levels = get_levels(project_id)
     return [{
         "id": l[0], "name": l[1], "genre": l[2], "difficulty": l[3],
-        "level_type": l[4], "theme": l[5], "version": l[6], "created_at": l[7], "updated_at": l[8]
+        "level_type": l[4], "theme": l[5], "level_data": l[6], "version": l[7], "created_at": l[8], "updated_at": l[9]
     } for l in levels]
 
 

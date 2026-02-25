@@ -162,7 +162,7 @@ def get_levels(project_id: int) -> list:
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT id, name, genre, difficulty, level_type, theme, version, created_at, updated_at
+        SELECT id, name, genre, difficulty, level_type, theme, level_data, version, created_at, updated_at
         FROM levels WHERE project_id = ? ORDER BY updated_at DESC
     """, (project_id,))
     levels = cursor.fetchall()
