@@ -398,7 +398,7 @@ async def generate_level_events(request: GenerationRequest):
                     custom_entities_info += f"- {et['emoji']} {et['name']} ({et['collision_type']}): {et.get('description', '')}{rules}{behavior}{metadata_info}\n"
         
         # Send "preparing" step
-        yield json.dumps({"event": "progress", "step": "preparing", "message": "Preparing prompt...", "progress": 10})
+        yield f"data: {json.dumps({'event': 'progress', 'step': 'preparing', 'message': 'Preparing prompt...', 'progress': 10})}\n\n"
         await asyncio.sleep(0.1)
         
         # Add custom entities to requirements
@@ -408,11 +408,11 @@ async def generate_level_events(request: GenerationRequest):
         
         # Check for supported genre
         if request.genre not in ["platformer", "puzzle", "shooter"]:
-            yield json.dumps({"event": "error", "message": f"Unsupported genre: {request.genre}"})
+            yield f"data: {json.dumps({'event': 'error', 'message': f'Unsupported genre: {request.genre}'})}\n\n"
             return
         
         # Send "generating" step
-        yield json.dumps({"event": "progress", "step": "generating", "message": f"AI is generating level ({_current_provider}:{_current_model})...", "progress": 40})
+        yield f"data: {json.dumps({'event': 'progress', 'step': 'generating', 'message': f'AI is generating level ({_current_provider}:{_current_model})...', 'progress': 40})}\n\n"
         await asyncio.sleep(0.1)
         
         # Generate with automatic fallback to Ollama
@@ -428,7 +428,7 @@ async def generate_level_events(request: GenerationRequest):
             )
         except Exception as gen_error:
             if is_rate_limit_error(str(gen_error)):
-                yield json.dumps({"event": "progress", "step": "fallback", "message": "Rate limit hit, falling back to Ollama...", "progress": 45})
+                yield f"data: {json.dumps({'event': 'progress', 'step': 'fallback', 'message': 'Rate limit hit, falling back to Ollama...', 'progress': 45})}\n\n"
                 await asyncio.sleep(0.1)
                 # Retry the whole generation with Ollama
                 generator = create_generator(client_type="ollama", model="llama3.2:latest", base_url="http://192.168.68.76:11434")
@@ -445,27 +445,61 @@ async def generate_level_events(request: GenerationRequest):
                 raise gen_error
         
         # Send "parsing" step  
-        yield json.dumps({"event": "progress", "step": "parsing", "message": "Parsing AI response...", "progress": 70})
+        yield f"data: {json.dumps({'event': 'progress', 'step': 'parsing', 'message': 'Parsing AI response...', 'progress': 70})}\n\n"
         await asyncio.sleep(0.1)
         
         # Send "validating" step
-        yield json.dumps({"event": "progress", "step": "validating", "message": "Validating level data...", "progress": 85})
+        yield f"data: {json.dumps({'event': 'progress', 'step': 'validating', 'message': 'Validating level data...', 'progress': 85})}\n\n"
         await asyncio.sleep(0.1)
         
         if result.success:
-            yield json.dumps({"event": "progress", "step": "complete", "message": "Level generated successfully!", "progress": 100})
+            level_response = result.level.model_dump()
+            
+            # Save the level to the database if project_id is provided
+            if request.project_id:
+                try:
+                    import database as db
+                    level_id = db.create_level(
+                        project_id=request.project_id,
+                        name=f"{request.theme.title()} {request.genre.capitalize()} - {request.difficulty.title()}",
+                        genre=request.genre,
+                        difficulty=request.difficulty,
+                        level_type=request.level_type,
+                        theme=request.theme,
+                        level_data=json.dumps(result.level.model_dump())
+                    )
+                    logger.info(f"Level saved to database with ID: {level_id}")
+                    
+                    # Fetch the complete level from DB to return
+                    levels = db.get_levels(request.project_id)
+                    saved_level = next((l for l in levels if l[0] == level_id), None)
+                    
+                    if saved_level:
+                        level_response = {
+                            "id": saved_level[0],
+                            "name": saved_level[1],
+                            "genre": saved_level[2],
+                            "difficulty": saved_level[3],
+                            "level_type": saved_level[4],
+                            "theme": saved_level[5],
+                            "level_data": saved_level[6],
+                            "version": saved_level[7],
+                            "created_at": saved_level[8],
+                            "updated_at": saved_level[9]
+                        }
+                    else:
+                        level_response["id"] = level_id
+                        
+                except Exception as save_error:
+                    logger.error(f"Failed to save level: {save_error}")
+                    # Still return success, just won't have DB ID
+            
+            yield f"data: {json.dumps({'event': 'progress', 'step': 'complete', 'message': 'Level generated successfully!', 'progress': 100})}\n\n"
             await asyncio.sleep(0.1)
             
-            yield json.dumps({
-                "event": "result",
-                "success": True,
-                "level": result.level.model_dump()
-            })
+            yield f"data: {json.dumps({'event': 'result', 'success': True, 'level': level_response})}\n\n"
         else:
-            yield json.dumps({
-                "event": "error",
-                "message": result.error or "Generation failed"
-            })
+            yield f"data: {json.dumps({'event': 'error', 'message': result.error or 'Generation failed'})}\n\n"
             
     except HTTPException:
         raise
@@ -479,7 +513,7 @@ async def generate_level_events(request: GenerationRequest):
         else:
             error_detail = f"Generation failed using {_current_provider}:{_current_model} - {error_str}"
         
-        yield json.dumps({"event": "error", "message": error_detail})
+        yield f"data: {json.dumps({'event': 'error', 'message': error_detail})}\n\n"
 
 
 @app.post("/api/generate/stream")
