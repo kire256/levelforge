@@ -39,6 +39,36 @@ npm run build && npm run preview -- --host
 - Backend: http://192.168.68.72:8000
 - Ollama: 192.168.68.76:11434 (local fallback)
 
+## Testing with Chromium (Headless Server)
+
+Since the server is headless (no X display), the OpenClaw browser tool doesn't work directly. 
+
+### Option 1: Run Chromium with Remote Debugging (from desktop session)
+```bash
+chromium-browser --remote-debugging-port=9222 --new-window "http://192.168.68.72:4173" &
+```
+
+Then I can interact via CDP API:
+```bash
+# Open a new page
+curl -X PUT "http://127.0.0.1:9222/json/new?http://192.168.68.72:4173"
+
+# List open pages
+curl -s http://127.0.0.1:9222/json
+
+# Check Chrome version
+curl -s http://127.0.0.1:9222/json/version
+```
+
+### Option 2: Install xvfb for headless browser (requires sudo)
+```bash
+sudo apt install xvfb
+xvfb-run chromium-browser --remote-debugging-port=9222 &
+```
+
+### Option 3: Test from any machine on the network
+Just open http://192.168.68.72:4173 in any browser.
+
 ## Completed Features
 
 ### Core Functionality
@@ -48,6 +78,7 @@ npm run build && npm run preview -- --host
 - ✅ Progress bar for AI generation (#22) - SSE streaming
 - ✅ Automatic Ollama fallback on rate limits
 - ✅ Level persistence after generation
+- ✅ AI prompts use project's custom entity types
 
 ### Enterprise UX (2026-02-24)
 - ✅ Complete UI redesign (Unity/VS Code style)
@@ -57,6 +88,28 @@ npm run build && npm run preview -- --host
 - ✅ Bottom console panel with tabs (Console, AI Output, Logs)
 - ✅ Keyboard shortcuts (Ctrl+1-6, Ctrl+I, Ctrl+`, F11)
 - ✅ Resizable panels with drag handles
+
+### Level Editor (2026-02-27)
+- ✅ Object hierarchy panel with tabs (Levels/Objects)
+- ✅ Click to select objects on canvas
+- ✅ Drag entities to reposition (live preview)
+- ✅ Edit object properties in inspector (position, size, name)
+- ✅ Changes persist to database
+- ✅ Delete level from inspector
+- ✅ Inline level name editing (click to edit, Enter to save)
+- ✅ Undo/Redo support for level changes
+- ✅ Tab disable/enable based on project selection
+- ✅ Auto-switch to Levels tab when selecting project
+
+### Canvas/Preview
+- ✅ Light background for level preview (better readability)
+- ✅ Draggable legend and info panels with minimize
+- ✅ Pan canvas with mouse drag
+- ✅ Zoom with mouse wheel
+- ✅ Cursor changes on hover (pointer on objects)
+- ✅ Selection highlight (purple ring)
+- ✅ Hover highlight (lighter purple)
+- ✅ Auto-fit bounds to show all entities
 
 ### Theme System
 - ✅ Dark theme (default): Deep blue-gray (#0f0f1a)
@@ -72,6 +125,8 @@ npm run build && npm run preview -- --host
 - ✅ Level details view
 - ✅ Library asset details
 - ✅ Edit buttons in inspector header
+- ✅ Object inspector with position/size editing
+- ✅ Level actions (delete level button)
 
 ### Console Panel
 - ✅ Three functional tabs (Console, AI Output, Logs)
@@ -95,12 +150,12 @@ npm run build && npm run preview -- --host
 ## Known Issues
 - Z-AI not working (API key/account issue)
 - LLM sometimes generates duplicate entity arrays (auto-merged by parser)
-- Level preview/edit not yet implemented
+- OpenClaw browser tool requires X display (doesn't work on headless server)
 
 ## Feature Roadmap
 See GitHub issues #16-27 for remaining features. Prioritized:
-1. Canvas Editor (#17) - Visual level editor with drag-drop
-2. Edit Mode (#17) - Move, Add, Remove Entities
+1. Canvas Editor (#17) - Visual level editor with drag-drop ✅ DONE
+2. Edit Mode (#17) - Move, Add, Remove Entities ✅ DONE
 3. Genre Presets for Entity Types (#16)
 4. Custom Entity Icons (#18)
 5. Playable Level Preview (#19)
@@ -108,40 +163,30 @@ See GitHub issues #16-27 for remaining features. Prioritized:
 
 ## GitHub
 - Issues: github.com/kire256/levelforge/issues
-- Branch: feature/save-load-db
-- Latest commit: Enterprise UX redesign with theme system
+- Repo: https://github.com/kire256/levelforge.git
+- Latest commit: Object selection, dragging, inspector editing
 
-## Recent Session (2026-02-24)
+## Recent Session (2026-02-27)
 
 ### Major Features Implemented
-- Enterprise UX redesign matching Unity/VS Code
-- Full theme system with light/dark modes
-- Unified inspector panel for all item types
-- Console panel with functional tabs
-- Level generation with SSE streaming
-- Open Project and Open Recent menus
-- Gemini AI client support
+- Object hierarchy panel with Levels/Objects tabs
+- Click to select objects (entities, platforms, spawn, goal)
+- Drag entities on canvas to reposition
+- Edit object properties in inspector
+- Persist changes to database via PUT /api/levels/:id
+- Delete level from inspector
+- Inline level name editing
+- Tab enable/disable based on project selection
+- Auto-switch to Levels on project select
 
 ### Bug Fixes
-- Fixed SSE event format (data: prefix + \n\n suffix)
-- Fixed duplicate entity arrays in LLM responses
-- Fixed level generation not saving to database
-- Fixed inspector disappearing on wide windows
-- Fixed theme colors not applying to all components
+- Fixed entities not visible on canvas (coordinate transform)
+- Fixed undo/redo not reflecting in UI
+- Fixed variable hoisting issues in LevelView (useCallback ordering)
+- Fixed levelData used before definition
 
 ### Technical Improvements
-- CSS variables for all colors (easy theming)
-- Better error logging with response preview
-- Auto-show console on errors
-- Recent projects persistence
-- Level names generated from theme/genre/difficulty
-
-### Services Setup
-- PM2 for frontend (auto-restart)
-- systemd user service for backend (auto-restart)
-- Both services persist across reboots
-
-### Pull Request
-- Branch: feature/save-load-db
-- Commit: feat: Enterprise UX redesign with theme system and level generation fixes
-- Ready for code review and merge
+- Auto-fit bounds for level preview
+- Improved resize handles (8px width, better hover feedback)
+- Custom entity types in AI prompts
+- Better cursor feedback (pointer on hover, move on drag)
