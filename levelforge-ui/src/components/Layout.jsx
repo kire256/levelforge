@@ -198,6 +198,7 @@ export default function Layout({
   onUndo,
   onRedo,
   historyInfo = null,
+  currentProject,
 }) {
   const [showInspector, setShowInspector] = useState(externalShowInspector ?? true)
   const [showConsole, setShowConsole] = useState(externalShowConsole ?? false)
@@ -211,17 +212,24 @@ export default function Layout({
   const [inspectorWidth, setInspectorWidth] = useState(320)
   const [consoleHeight, setConsoleHeight] = useState(180)
   
+  // Inline editing state for level name
+  const [editingLevelName, setEditingLevelName] = useState(false)
+  const [tempLevelName, setTempLevelName] = useState('')
+  const levelNameInputRef = useRef(null)
+  
   // Resize refs
   const isResizingInspector = useRef(false)
   const isResizingConsole = useRef(false)
   
+  // Tabs with disabled state based on project selection
+  const hasProject = !!currentProject
   const tabs = [
-    { id: 'dashboard', label: 'Dashboard', icon: '📊', shortcut: '1' },
-    { id: 'entities', label: 'Entities', icon: '🧬', shortcut: '2' },
-    { id: 'levels', label: 'Levels', icon: '🗺', shortcut: '3' },
-    { id: 'library', label: 'Library', icon: '📚', shortcut: '4' },
-    { id: 'ai-tools', label: 'AI Tools', icon: '🤖', shortcut: '5' },
-    { id: 'settings', label: 'Settings', icon: '⚙️', shortcut: '6' },
+    { id: 'dashboard', label: 'Dashboard', icon: '📊', shortcut: '1', disabled: false },
+    { id: 'entities', label: 'Entities', icon: '🧬', shortcut: '2', disabled: !hasProject },
+    { id: 'levels', label: 'Levels', icon: '🗺', shortcut: '3', disabled: !hasProject },
+    { id: 'library', label: 'Library', icon: '📚', shortcut: '4', disabled: !hasProject },
+    { id: 'ai-tools', label: 'AI Tools', icon: '🤖', shortcut: '5', disabled: !hasProject },
+    { id: 'settings', label: 'Settings', icon: '⚙️', shortcut: '6', disabled: false },
   ]
   
   // Close menu when clicking outside
@@ -235,6 +243,46 @@ export default function Layout({
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
+  
+  // Focus input when editing starts
+  useEffect(() => {
+    if (editingLevelName && levelNameInputRef.current) {
+      levelNameInputRef.current.focus()
+      levelNameInputRef.current.select()
+    }
+  }, [editingLevelName])
+  
+  // Inline level name editing handlers
+  const handleLevelNameClick = useCallback(() => {
+    if (!onRenameLevel || selectedItem?.type !== 'Level') return
+    setTempLevelName(selectedItem.name)
+    setEditingLevelName(true)
+  }, [selectedItem, onRenameLevel])
+  
+  const handleLevelNameChange = useCallback((e) => {
+    setTempLevelName(e.target.value)
+  }, [])
+  
+  const handleLevelNameKeyDown = useCallback((e) => {
+    if (e.key === 'Enter') {
+      const newName = tempLevelName.trim()
+      if (newName && newName !== selectedItem?.name && onRenameLevel) {
+        onRenameLevel({ ...selectedItem, name: newName })
+      }
+      setEditingLevelName(false)
+    } else if (e.key === 'Escape') {
+      setEditingLevelName(false)
+    }
+    e.stopPropagation()
+  }, [tempLevelName, selectedItem, onRenameLevel])
+  
+  const handleLevelNameBlur = useCallback(() => {
+    const newName = tempLevelName.trim()
+    if (newName && newName !== selectedItem?.name && onRenameLevel) {
+      onRenameLevel({ ...selectedItem, name: newName })
+    }
+    setEditingLevelName(false)
+  }, [tempLevelName, selectedItem, onRenameLevel])
   
   // Auto-show console when forced
   useEffect(() => {
@@ -452,9 +500,10 @@ export default function Layout({
         {tabs.map(tab => (
           <button
             key={tab.id}
-            className={`tab-btn ${activeTab === tab.id ? 'active' : ''}`}
-            onClick={() => onTabChange(tab.id)}
-            title={`Ctrl+${tab.shortcut}`}
+            className={`tab-btn ${activeTab === tab.id ? 'active' : ''} ${tab.disabled ? 'disabled' : ''}`}
+            onClick={() => !tab.disabled && onTabChange(tab.id)}
+            title={tab.disabled ? 'Select a project first' : `Ctrl+${tab.shortcut}`}
+            disabled={tab.disabled}
           >
             <span className="tab-icon">{tab.icon}</span>
             <span className="tab-label">{tab.label}</span>
@@ -477,22 +526,15 @@ export default function Layout({
               className="resize-handle-vertical"
               onMouseDown={handleInspectorMouseDown}
             />
-            <aside className="inspector-panel">
+            <aside className="inspector-panel" style={{ width: inspectorWidth }}>
               <div className="panel-header">
                 <h3>Inspector</h3>
                 <div className="panel-header-actions">
                   {selectedItem && selectedItem.type === 'Entity' && !inspectorContent && onEditItem && (
                     <button className="btn-small" onClick={() => onEditItem(selectedItem)}>Edit</button>
                   )}
-                  {selectedItem && selectedItem.type === 'Level' && !inspectorContent && (
-                    <>
-                      {onRenameLevel && (
-                        <button className="btn-small" onClick={() => onRenameLevel(selectedItem)}>Rename</button>
-                      )}
-                      {onDeleteLevel && (
-                        <button className="btn-small btn-danger" onClick={() => onDeleteLevel(selectedItem)}>Delete</button>
-                      )}
-                    </>
+                  {selectedItem && selectedItem.type === 'Level' && !inspectorContent && onDeleteLevel && (
+                    <button className="btn-small btn-danger" onClick={() => onDeleteLevel(selectedItem)}>Delete</button>
                   )}
                   <button 
                     className="panel-close" 
@@ -525,7 +567,26 @@ export default function Layout({
                           {selectedItem.category === 'templates' && '🤖'}
                         </span>
                       ) : null}
-                      <h4>{selectedItem.name || 'Selected Item'}</h4>
+                      {editingLevelName && selectedItem.type === 'Level' ? (
+                        <input
+                          ref={levelNameInputRef}
+                          type="text"
+                          className="inspector-name-input"
+                          value={tempLevelName}
+                          onChange={handleLevelNameChange}
+                          onKeyDown={handleLevelNameKeyDown}
+                          onBlur={handleLevelNameBlur}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      ) : (
+                        <h4 
+                          className={selectedItem.type === 'Level' && onRenameLevel ? 'editable-name' : ''}
+                          onClick={handleLevelNameClick}
+                          title={selectedItem.type === 'Level' && onRenameLevel ? 'Click to rename' : undefined}
+                        >
+                          {selectedItem.name || 'Selected Item'}
+                        </h4>
+                      )}
                     </div>
                     {selectedItem.description && (
                       <p className="inspector-desc">{selectedItem.description}</p>

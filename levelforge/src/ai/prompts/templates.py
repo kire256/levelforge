@@ -2,7 +2,7 @@
 LevelForge prompt templates for level generation.
 """
 
-from typing import Optional
+from typing import Optional, List, Dict, Any
 from dataclasses import dataclass
 
 
@@ -23,7 +23,84 @@ class GenerationPrompt:
         return self.user.format(**kwargs)
 
 
-# Level generation prompts
+def build_entity_types_section(custom_entities: List[Dict[str, Any]] = None) -> str:
+    """Build the entity types section for prompts, using custom entities if available."""
+    if custom_entities and len(custom_entities) > 0:
+        # Use custom entity types from the project
+        entity_list = []
+        for et in custom_entities:
+            entity_desc = f"- {et['name']}: {et.get('description', 'No description')}"
+            if et.get('placement_rules'):
+                entity_desc += f" Placement: {et['placement_rules']}"
+            if et.get('behavior'):
+                entity_desc += f" Behavior: {et['behavior']}"
+            entity_list.append(entity_desc)
+        
+        return f"""Use ONLY these entity types defined for this project:
+{chr(10).join(entity_list)}
+
+Each entity must have: type (entity name), x, y coordinates.
+You can also include optional properties: name, behavior, metadata"""
+    else:
+        # Fallback to generic types
+        return """Entity types: player_spawn, goal, coin, key, enemy_basic, enemy_flying, enemy_patrol, spike, lava, powerup
+
+Each entity must have: type, x, y coordinates."""
+
+
+def get_platformer_prompt(
+    difficulty: str = "medium",
+    requirements: str = "5-7 platforms, 3-5 enemies, 5-8 coins",
+    theme: str = "default",
+    custom_entities: List[Dict[str, Any]] = None
+) -> tuple[str, str]:
+    """Get the system and user prompts for platformer generation."""
+    
+    entity_types_section = build_entity_types_section(custom_entities)
+    
+    system_prompt = f"""You are a professional game level designer. Your task is to create game levels in JSON format.
+
+CRITICAL: You MUST output ONLY valid JSON. No explanations, no markdown, no text outside the JSON.
+
+Level schema:
+{{
+  "version": "1.0",
+  "genre": "platformer",
+  "type": "linear",
+  "theme": "theme name",
+  "difficulty": "easy|medium|hard|expert",
+  "platforms": [{{"x": 0, "y": 480, "width": 500, "height": 30}}, ...],
+  "entities": [
+    {{"type": "player_spawn", "x": 50, "y": 450}},
+    {{"type": "goal", "x": 450, "y": 80}},
+    {{"type": "enemy", "x": 200, "y": 380, "patrol_range": [150, 250]}},
+    {{"type": "coin", "x": 100, "y": 350}}
+  ],
+  "metadata": {{"estimated_duration_seconds": 120, "difficulty_score": 5.5}}
+}}
+
+{entity_types_section}
+
+Platform requirements:
+- Include a ground platform at y >= 450
+- Platforms should be reachable with standard jumping
+- Mix of easy (bottom) to hard (top) sections
+- Use reasonable jump distances (100-200px for medium difficulty)
+
+REQUIRED: Include at least one player_spawn, one goal, and distribute entities throughout the level."""
+
+    user_prompt = f"""Create a {difficulty} difficulty platformer level with the following requirements:
+
+{requirements}
+
+Theme: {theme}
+
+Generate ONLY valid JSON, no other text."""
+    
+    return system_prompt, user_prompt
+
+
+# Keep old templates for backward compatibility
 PLATFORMER_LINEAR = GenerationPrompt(
     system="""You are a professional game level designer. Your task is to create game levels in JSON format.
 
@@ -227,15 +304,6 @@ The configuration should include:
 
 Output JSON only."""
 )
-
-
-def get_platformer_prompt(
-    difficulty: str = "medium",
-    requirements: str = "5-7 platforms, 3-5 enemies, 5-8 coins",
-    theme: str = "default"
-) -> GenerationPrompt:
-    """Get the appropriate prompt for platformer generation."""
-    return PLATFORMER_LINEAR
 
 
 def get_metroidvania_prompt(

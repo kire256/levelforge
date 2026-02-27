@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Layout from './components/Layout'
 import Dashboard from './components/Dashboard'
 import Entities from './components/Entities'
@@ -50,6 +50,7 @@ function App() {
   // Selection state (for inspector)
   const [selectedItem, setSelectedItem] = useState(null)
   const [inspectorContent, setInspectorContent] = useState(null)
+  const [selectedObject, setSelectedObject] = useState(null) // For level object selection
   
   // Console state
   const [consoleLogs, setConsoleLogs] = useState([])
@@ -77,6 +78,9 @@ function App() {
     getHistoryInfo
   } = useUndoRedo(currentLevel, { maxHistorySize: 50, debounceMs: 200 })
   
+  // Use the historical state as the "display" level
+  const displayLevel = levelWithHistory || currentLevel
+  
   // Wrap setCurrentLevel to also update history
   const handleSetCurrentLevel = (level) => {
     setCurrentLevel(level)
@@ -84,6 +88,21 @@ function App() {
       setLevelWithHistory(level, true)
     }
   }
+  
+  // Handle undo - apply the historical state back to the actual level
+  const handleUndo = useCallback(() => {
+    if (!canUndo) return
+    undoLevel()
+    // displayLevel will automatically reflect the historical state
+  }, [canUndo, undoLevel])
+  
+  // Sync selectedItem with displayLevel changes (from undo/redo)
+  useEffect(() => {
+    if (displayLevel && selectedItem?.type === 'Level' && selectedItem?.id === displayLevel?.id) {
+      // Update selected item to reflect historical state
+      setSelectedItem({ type: 'Level', ...displayLevel })
+    }
+  }, [displayLevel])
   
   // Console logging helper
   const logToConsole = (message, type = 'info') => {
@@ -100,6 +119,53 @@ function App() {
   const handleClearConsole = () => {
     setConsoleLogs([])
   }
+  
+  // Update object in level data
+  const handleUpdateObject = useCallback(async (updatedObj) => {
+    if (!updatedObj || !currentLevel) return
+    
+    // Parse current level data
+    let levelData = null
+    try {
+      levelData = typeof currentLevel.level_data === 'string'
+        ? JSON.parse(currentLevel.level_data)
+        : currentLevel.level_data
+    } catch {
+      return
+    }
+    
+    if (!levelData) return
+    
+    const { type, data, index, entityType } = updatedObj
+    
+    // Update the appropriate part of level data
+    if (type === 'entity' && levelData.entities && index !== undefined) {
+      levelData.entities[index] = { ...levelData.entities[index], ...data }
+    } else if (type === 'platform' && levelData.platforms && index !== undefined) {
+      levelData.platforms[index] = { ...levelData.platforms[index], ...data }
+    } else if (type === 'spawn') {
+      levelData.player_spawn = { ...levelData.player_spawn, ...data }
+    } else if (type === 'goal') {
+      levelData.goal = { ...levelData.goal, ...data }
+    }
+    
+    // Save to backend
+    try {
+      const res = await fetch(`${API_BASE}/api/levels/${currentLevel.id}?level_data=${encodeURIComponent(JSON.stringify(levelData))}`, {
+        method: 'PUT'
+      })
+      if (!res.ok) throw new Error('Failed to update level')
+      
+      // Update local state
+      const updatedLevel = { ...currentLevel, level_data: JSON.stringify(levelData) }
+      setCurrentLevel(updatedLevel)
+      
+      logToConsole(`Updated ${type} ${index !== undefined ? `#${index + 1}` : ''}`, 'info')
+    } catch (err) {
+      console.error('Update object failed:', err)
+      logToConsole('Failed to update object', 'error')
+    }
+  }, [currentLevel, logToConsole])
   
   // Load projects and models on mount
   useEffect(() => {
@@ -122,6 +188,13 @@ function App() {
     setSelectedItem(null)
     setInspectorContent(null)
   }, [activeTab])
+  
+  // Force dashboard tab when no project is selected
+  useEffect(() => {
+    if (!currentProject && activeTab !== 'dashboard' && activeTab !== 'settings') {
+      setActiveTab('dashboard')
+    }
+  }, [currentProject, activeTab])
   
   // API functions
   const loadProjects = async () => {
@@ -217,6 +290,9 @@ function App() {
     localStorage.setItem('levelforge-recent-projects', JSON.stringify(updated))
     
     logToConsole(`Loaded project: ${project.name}`, 'info')
+    
+    // Switch to levels tab when selecting a project
+    setActiveTab('levels')
   }
   
   const handleOpenProject = () => {
@@ -414,7 +490,7 @@ function App() {
       alert('Failed to rename level')
     }
   }
-
+  
   const handleDeleteLevel = async (level) => {
     if (!confirm(`Delete level "${level?.name}"? This cannot be undone.`)) return
 
@@ -425,6 +501,7 @@ function App() {
       await loadLevels(currentProject.id)
       if (currentLevel?.id === level.id) setCurrentLevel(null)
       if (selectedItem?.id === level.id && selectedItem?.type === 'Level') setSelectedItem(null)
+      setSelectedObject(null) // Clear selected object too
       logToConsole(`Deleted level "${level.name}"`, 'info')
     } catch (err) {
       console.error('Delete level failed:', err)
@@ -432,6 +509,149 @@ function App() {
       alert('Failed to delete level')
     }
   }
+  
+  // Render object inspector content
+  const renderObjectInspector = useCallback((obj) => {
+    if (!obj || !obj.data) return null
+    
+    const { type, data, index } = obj
+    
+    const handleFieldChange = (field, value) => {
+      const updatedData = { ...data, [field]: value }
+      const updatedObj = { ...obj, data: updatedData }
+      setSelectedObject(updatedObj)
+      // Persist the change
+      handleUpdateObject(updatedObj)
+    }
+    
+    const handleNumberChange = (field, value) => {
+      const num = parseFloat(value)
+      if (!isNaN(num)) {
+        handleFieldChange(field, num)
+      }
+    }
+    
+    // Get type info for entities
+    const getTypeInfo = () => {
+      if (type === 'entity') {
+        const found = entityTypes.find(et => et.name.toLowerCase() === obj.entityType?.toLowerCase())
+        if (found) return { emoji: found.emoji, name: found.name }
+      }
+      if (type === 'platform') return { emoji: '▬', name: 'Platform' }
+      if (type === 'spawn') return { emoji: '🧑', name: 'Player Spawn' }
+      if (type === 'goal') return { emoji: '🚩', name: 'Goal' }
+      return { emoji: '📦', name: type }
+    }
+    
+    const typeInfo = getTypeInfo()
+    
+    return (
+      <div className="object-inspector">
+        <div className="object-inspector-header">
+          <span className="object-icon">{typeInfo.emoji}</span>
+          <span className="object-title">{typeInfo.name} {type === 'platform' || type === 'entity' ? `#${(index ?? 0) + 1}` : ''}</span>
+        </div>
+        
+        <div className="object-section">
+          <h4>Position</h4>
+          <div className="object-field">
+            <label>X</label>
+            <input 
+              type="number" 
+              value={data.x ?? 0} 
+              onChange={(e) => handleNumberChange('x', e.target.value)}
+            />
+          </div>
+          <div className="object-field">
+            <label>Y</label>
+            <input 
+              type="number" 
+              value={data.y ?? 0} 
+              onChange={(e) => handleNumberChange('y', e.target.value)}
+            />
+          </div>
+        </div>
+        
+        {type === 'platform' && (
+          <div className="object-section">
+            <h4>Size</h4>
+            <div className="object-field">
+              <label>Width</label>
+              <input 
+                type="number" 
+                value={data.width ?? 100} 
+                onChange={(e) => handleNumberChange('width', e.target.value)}
+              />
+            </div>
+            <div className="object-field">
+              <label>Height</label>
+              <input 
+                type="number" 
+                value={data.height ?? 30} 
+                onChange={(e) => handleNumberChange('height', e.target.value)}
+              />
+            </div>
+          </div>
+        )}
+        
+        {type === 'entity' && (
+          <div className="object-section">
+            <h4>Entity Properties</h4>
+            <div className="object-field">
+              <label>Name</label>
+              <input 
+                type="text" 
+                value={data.name ?? ''} 
+                onChange={(e) => handleFieldChange('name', e.target.value)}
+                placeholder="Optional name"
+              />
+            </div>
+            <div className="object-field">
+              <label>Type</label>
+              <input 
+                type="text" 
+                value={obj.entityType ?? data.type ?? ''} 
+                disabled
+                className="disabled"
+              />
+            </div>
+          </div>
+        )}
+        
+        {/* Show any additional metadata */}
+        {Object.entries(data).map(([key, value]) => {
+          if (['x', 'y', 'width', 'height', 'type', 'name'].includes(key)) return null
+          if (typeof value === 'object') {
+            return (
+              <div key={key} className="object-section">
+                <h4>{key}</h4>
+                <pre className="object-metadata">{JSON.stringify(value, null, 2)}</pre>
+              </div>
+            )
+          }
+          return null
+        })}
+        
+        {/* Level actions */}
+        <div className="object-section">
+          <h4>Level Actions</h4>
+          <div className="object-actions">
+            <button 
+              className="btn-small btn-danger" 
+              onClick={() => {
+                if (confirm(`Delete level "${currentLevel?.name}"? This cannot be undone.`)) {
+                  handleDeleteLevel(currentLevel)
+                  setSelectedObject(null)
+                }
+              }}
+            >
+              🗑 Delete Level
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }, [entityTypes, handleUpdateObject, currentLevel, handleDeleteLevel])
   
   const handleSelectEntity = (entity) => {
     setSelectedItem({ type: 'Entity', ...entity })
@@ -838,7 +1058,7 @@ Built with ❤️ by OpenClaw`)
           <Levels
             currentProject={currentProject}
             levels={levels}
-            currentLevel={currentLevel}
+            currentLevel={displayLevel}
             onSelectLevel={handleSelectLevel}
             onGenerateLevel={handleGenerateLevel}
             generating={generating}
@@ -851,6 +1071,10 @@ Built with ❤️ by OpenClaw`)
             onShowGeneratorChange={setShowGenerator}
             viewMode={levelViewMode}
             onViewModeChange={setLevelViewMode}
+            onRenameLevel={handleRenameLevel}
+            selectedObject={selectedObject}
+            onSelectObject={setSelectedObject}
+            onUpdateObject={handleUpdateObject}
           />
         )
       case 'library':
@@ -894,7 +1118,11 @@ Built with ❤️ by OpenClaw`)
       onTabChange={setActiveTab}
       onMenuAction={handleMenuAction}
       selectedItem={selectedItem}
-      inspectorContent={editingEntity ? renderEntityEditForm() : inspectorContent}
+      inspectorContent={
+        editingEntity ? renderEntityEditForm() : 
+        (activeTab === 'levels' && selectedObject) ? renderObjectInspector(selectedObject) : 
+        inspectorContent
+      }
       consoleLogs={consoleLogs}
       onClearConsole={handleClearConsole}
       onEditItem={handleEditEntity}
@@ -909,9 +1137,10 @@ Built with ❤️ by OpenClaw`)
       onConsoleShown={() => setForceShowConsole(false)}
       canUndo={canUndo}
       canRedo={canRedo}
-      onUndo={undoLevel}
+      onUndo={handleUndo}
       onRedo={redoLevel}
       historyInfo={getHistoryInfo()}
+      currentProject={currentProject}
     >
       {renderContent()}
     </Layout>

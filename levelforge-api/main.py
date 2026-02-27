@@ -294,7 +294,7 @@ def is_rate_limit_error(error_str: str) -> bool:
     ])
 
 
-def generate_with_fallback(generator, genre, level_type, difficulty, full_requirements, theme, abilities):
+def generate_with_fallback(generator, genre, level_type, difficulty, full_requirements, theme, abilities, custom_entities=None):
     """Try generation with current model, fall back to Ollama on rate limits."""
     global _generator, _current_model, _current_provider
     
@@ -311,7 +311,8 @@ def generate_with_fallback(generator, genre, level_type, difficulty, full_requir
                 return generator.generate_platformer(
                     difficulty=difficulty,
                     requirements=full_requirements,
-                    theme=theme
+                    theme=theme,
+                    custom_entities=custom_entities
                 )
         elif genre == "puzzle":
             return generator.generate_puzzle(
@@ -345,7 +346,8 @@ def generate_with_fallback(generator, genre, level_type, difficulty, full_requir
                         return fallback_generator.generate_platformer(
                             difficulty=difficulty,
                             requirements=full_requirements,
-                            theme=theme
+                            theme=theme,
+                            custom_entities=custom_entities
                         )
                 elif genre == "puzzle":
                     return fallback_generator.generate_puzzle(
@@ -374,28 +376,14 @@ async def generate_level_events(request: GenerationRequest):
             generator = get_generator()
         
         # Fetch custom entity types if project_id provided
+        custom_entities = None
         custom_entities_info = ""
         if request.project_id:
             import database as db
             entity_types = db.get_entity_types(request.project_id)
             if entity_types:
-                custom_entities_info = "\n\nCustom entity types for this project:\n"
-                for et in entity_types:
-                    rules = f" - Placement: {et['placement_rules']}" if et.get('placement_rules') else ""
-                    behavior = f" - Behavior: {et['behavior']}" if et.get('behavior') else ""
-                    
-                    # Parse and include metadata fields
-                    metadata_info = ""
-                    try:
-                        fields = json.loads(et.get('metadata_fields', '[]'))
-                        if fields:
-                            metadata_info = " - Metadata fields:"
-                            for field in fields:
-                                metadata_info += f"\n    * {field.get('name', 'unknown')} ({field.get('type', 'text')}): {field.get('description', '')} [default: {field.get('default', '')}]"
-                    except:
-                        pass
-                    
-                    custom_entities_info += f"- {et['emoji']} {et['name']} ({et['collision_type']}): {et.get('description', '')}{rules}{behavior}{metadata_info}\n"
+                custom_entities = entity_types
+                custom_entities_info = "\n\nUsing custom entity types from this project."
         
         # Send "preparing" step
         yield f"data: {json.dumps({'event': 'progress', 'step': 'preparing', 'message': 'Preparing prompt...', 'progress': 10})}\n\n"
@@ -403,8 +391,6 @@ async def generate_level_events(request: GenerationRequest):
         
         # Add custom entities to requirements
         full_requirements = request.requirements or "Create an engaging level"
-        if custom_entities_info:
-            full_requirements += custom_entities_info
         
         # Check for supported genre
         if request.genre not in ["platformer", "puzzle", "shooter"]:
@@ -424,7 +410,8 @@ async def generate_level_events(request: GenerationRequest):
                 difficulty=request.difficulty,
                 full_requirements=full_requirements,
                 theme=request.theme,
-                abilities=request.abilities
+                abilities=request.abilities,
+                custom_entities=custom_entities
             )
         except Exception as gen_error:
             if is_rate_limit_error(str(gen_error)):
@@ -439,7 +426,8 @@ async def generate_level_events(request: GenerationRequest):
                     difficulty=request.difficulty,
                     full_requirements=full_requirements,
                     theme=request.theme,
-                    abilities=request.abilities
+                    abilities=request.abilities,
+                    custom_entities=custom_entities
                 )
             else:
                 raise gen_error

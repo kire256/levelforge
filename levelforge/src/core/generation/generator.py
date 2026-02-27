@@ -17,6 +17,7 @@ from levelforge.src.ai.prompts.templates import (
     SHOOTER,
     REFINE_MAKE_HARDER,
     REFINE_ADD_PLATFORMS,
+    build_entity_types_section,
 )
 from levelforge.src.ai.parsers.response_parser import ResponseParser, ParseResult
 from levelforge.src.core.validation.validator import SchemaValidator
@@ -69,7 +70,8 @@ class LevelGenerator:
         self,
         difficulty: str = "medium",
         requirements: str = "5-7 platforms, 3-5 enemies, 5-8 coins",
-        theme: str = "default"
+        theme: str = "default",
+        custom_entities: list = None
     ) -> GenerationResult:
         """
         Generate a platformer level.
@@ -78,16 +80,16 @@ class LevelGenerator:
             difficulty: Difficulty level (easy, medium, hard, expert)
             requirements: Additional requirements description
             theme: Visual theme
+            custom_entities: List of custom entity types from the project
             
         Returns:
             GenerationResult with generated level or error
         """
-        prompt_template = PLATFORMER_LINEAR
-        system_prompt = prompt_template.system
-        user_prompt = prompt_template.user.format(
+        system_prompt, user_prompt = get_platformer_prompt(
             difficulty=difficulty,
             requirements=requirements,
-            theme=theme
+            theme=theme,
+            custom_entities=custom_entities
         )
         
         return self._generate(system_prompt, user_prompt)
