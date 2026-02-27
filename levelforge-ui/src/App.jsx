@@ -149,16 +149,19 @@ function App() {
       levelData.goal = { ...levelData.goal, ...data }
     }
     
+    // Update local state immediately for responsiveness
+    const updatedLevel = { ...currentLevel, level_data: JSON.stringify(levelData) }
+    setCurrentLevel(updatedLevel)
+    
+    // Also update the levels array
+    setLevels(prev => prev.map(l => l.id === updatedLevel.id ? updatedLevel : l))
+    
     // Save to backend
     try {
       const res = await fetch(`${API_BASE}/api/levels/${currentLevel.id}?level_data=${encodeURIComponent(JSON.stringify(levelData))}`, {
         method: 'PUT'
       })
       if (!res.ok) throw new Error('Failed to update level')
-      
-      // Update local state
-      const updatedLevel = { ...currentLevel, level_data: JSON.stringify(levelData) }
-      setCurrentLevel(updatedLevel)
       
       logToConsole(`Updated ${type} ${index !== undefined ? `#${index + 1}` : ''}`, 'info')
     } catch (err) {
@@ -516,18 +519,32 @@ function App() {
     
     const { type, data, index } = obj
     
+    // Update local state only (don't save to API yet)
     const handleFieldChange = (field, value) => {
       const updatedData = { ...data, [field]: value }
       const updatedObj = { ...obj, data: updatedData }
       setSelectedObject(updatedObj)
-      // Persist the change
-      handleUpdateObject(updatedObj)
     }
     
     const handleNumberChange = (field, value) => {
       const num = parseFloat(value)
       if (!isNaN(num)) {
         handleFieldChange(field, num)
+      }
+    }
+    
+    // Save to API on blur or enter
+    const handleFieldBlur = () => {
+      if (selectedObject) {
+        handleUpdateObject(selectedObject)
+      }
+    }
+    
+    const handleFieldKeyDown = (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault()
+        handleFieldBlur()
+        e.target.blur()
       }
     }
     
@@ -560,6 +577,8 @@ function App() {
               type="number" 
               value={data.x ?? 0} 
               onChange={(e) => handleNumberChange('x', e.target.value)}
+              onBlur={handleFieldBlur}
+              onKeyDown={handleFieldKeyDown}
             />
           </div>
           <div className="object-field">
@@ -568,6 +587,8 @@ function App() {
               type="number" 
               value={data.y ?? 0} 
               onChange={(e) => handleNumberChange('y', e.target.value)}
+              onBlur={handleFieldBlur}
+              onKeyDown={handleFieldKeyDown}
             />
           </div>
         </div>
@@ -581,6 +602,8 @@ function App() {
                 type="number" 
                 value={data.width ?? 100} 
                 onChange={(e) => handleNumberChange('width', e.target.value)}
+                onBlur={handleFieldBlur}
+                onKeyDown={handleFieldKeyDown}
               />
             </div>
             <div className="object-field">
@@ -589,6 +612,8 @@ function App() {
                 type="number" 
                 value={data.height ?? 30} 
                 onChange={(e) => handleNumberChange('height', e.target.value)}
+                onBlur={handleFieldBlur}
+                onKeyDown={handleFieldKeyDown}
               />
             </div>
           </div>
@@ -603,6 +628,8 @@ function App() {
                 type="text" 
                 value={data.name ?? ''} 
                 onChange={(e) => handleFieldChange('name', e.target.value)}
+                onBlur={handleFieldBlur}
+                onKeyDown={handleFieldKeyDown}
                 placeholder="Optional name"
               />
             </div>
@@ -651,7 +678,7 @@ function App() {
         </div>
       </div>
     )
-  }, [entityTypes, handleUpdateObject, currentLevel, handleDeleteLevel])
+  }, [entityTypes, handleUpdateObject, currentLevel, handleDeleteLevel, selectedObject])
   
   const handleSelectEntity = (entity) => {
     setSelectedItem({ type: 'Entity', ...entity })
