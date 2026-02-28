@@ -5,7 +5,7 @@ const VERSION = {
   major: 0,
   minor: 2,
   patch: 0,
-  build: 69
+  build: 70
 }
 
 export const BUILD_VERSION = `v${VERSION.major}.${VERSION.minor}.${VERSION.patch}`

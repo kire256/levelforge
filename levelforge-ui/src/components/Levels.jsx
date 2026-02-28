@@ -79,6 +79,10 @@ export default function Levels({
   const [selectedTool, setSelectedTool] = useState(TOOLS.PENCIL)
   const [tilemapData, setTilemapData] = useState(null)
   
+  // Shared pan/zoom state for both layers
+  const [sharedZoom, setSharedZoom] = useState(1)
+  const [sharedPan, setSharedPan] = useState({ x: 0, y: 0 })
+  
   // Load entity types when project changes
   const [entityTypes, setEntityTypes] = useState([])
   
@@ -220,6 +224,15 @@ export default function Levels({
       }
       return { ...prev, data: newData }
     })
+  }, [])
+  
+  // Shared pan/zoom handlers
+  const handleSharedZoomChange = useCallback((newZoom) => {
+    setSharedZoom(newZoom)
+  }, [])
+  
+  const handleSharedPanChange = useCallback((newPan) => {
+    setSharedPan(newPan)
   }, [])
   
   // Object selection handlers
@@ -637,6 +650,10 @@ export default function Levels({
                             showGrid={showGrid}
                             onTileChange={handleTileChange}
                             interactive={activeLayer === LAYERS.TILEMAP}
+                            externalZoom={sharedZoom}
+                            externalPan={sharedPan}
+                            onZoomChange={handleSharedZoomChange}
+                            onPanChange={handleSharedPanChange}
                           />
                         </div>
                       )}
@@ -656,6 +673,10 @@ export default function Levels({
                             showGrid={showGrid && activeLayer === LAYERS.ENTITIES}
                             gridSize={gridSize}
                             interactive={activeLayer === LAYERS.ENTITIES}
+                            externalZoom={sharedZoom}
+                            externalPan={sharedPan}
+                            onZoomChange={handleSharedZoomChange}
+                            onPanChange={handleSharedPanChange}
                           />
                         </div>
                       )}

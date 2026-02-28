@@ -20,11 +20,23 @@ export default function TilemapCanvas({
   snapToGrid = false,
   onTileChange,
   interactive = true,
+  externalZoom,
+  externalPan,
+  onZoomChange,
+  onPanChange,
 }) {
   const canvasRef = useRef(null)
   const containerRef = useRef(null)
-  const [zoom, setZoom] = useState(1)
-  const [pan, setPan] = useState({ x: 0, y: 0 })
+  
+  // Use external pan/zoom if provided, otherwise use internal state
+  const [internalZoom, setInternalZoom] = useState(1)
+  const [internalPan, setInternalPan] = useState({ x: 0, y: 0 })
+  
+  const zoom = externalZoom !== undefined ? externalZoom : internalZoom
+  const pan = externalPan !== undefined ? externalPan : internalPan
+  const setZoom = onZoomChange || setInternalZoom
+  const setPan = onPanChange || setInternalPan
+  
   const [isPanning, setIsPanning] = useState(false)
   const [panStart, setPanStart] = useState({ x: 0, y: 0 })
   const [canvasSize, setCanvasSize] = useState({ width: 1200, height: 800 })

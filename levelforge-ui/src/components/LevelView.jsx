@@ -92,11 +92,19 @@ const ENTITY_COLORS = {
   unknown: '#9ca3af'
 }
 
-export default function LevelView({ level, mode = 'draft', onModeChange, entityTypes = [], onRename, selectedObject, onSelectObject, onUpdateObject, snapToGrid = false, showGrid = true, gridSize = 50, interactive = true }) {
+export default function LevelView({ level, mode = 'draft', onModeChange, entityTypes = [], onRename, selectedObject, onSelectObject, onUpdateObject, snapToGrid = false, showGrid = true, gridSize = 50, interactive = true, externalZoom, externalPan, onZoomChange, onPanChange }) {
   const canvasRef = useRef(null)
   const [viewMode, setViewMode] = useState(mode) // draft, polish, playable
-  const [zoom, setZoom] = useState(1)
-  const [pan, setPan] = useState({ x: 0, y: 0 })
+  
+  // Use external pan/zoom if provided, otherwise use internal state
+  const [internalZoom, setInternalZoom] = useState(1)
+  const [internalPan, setInternalPan] = useState({ x: 0, y: 0 })
+  
+  const zoom = externalZoom !== undefined ? externalZoom : internalZoom
+  const pan = externalPan !== undefined ? externalPan : internalPan
+  const setZoom = onZoomChange || setInternalZoom
+  const setPan = onPanChange || setInternalPan
+  
   const [isPanning, setIsPanning] = useState(false)
   const [panStart, setPanStart] = useState({ x: 0, y: 0 })
   
