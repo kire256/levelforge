@@ -190,6 +190,27 @@ See GitHub issues #16-27 for remaining features. Prioritized:
 - Integrated into Settings > "Tile Types" section
 - Tile size selector (16/24/32/48/64px)
 
+### Phase 2 Implementation (Tilemap Editor UI)
+- TilemapCanvas component:
+  - Grid-based canvas rendering
+  - Zoom (0.25x - 4x) and pan support
+  - Tile culling for performance
+  - Hover highlight and rect preview
+- TilePalette component:
+  - Tool selection (Pencil, Eraser, Rectangle, Fill, Pan)
+  - Tile type swatches with selection
+  - Selected tile info display
+- Drawing tools:
+  - Pencil: Paint individual tiles
+  - Eraser: Clear tiles
+  - Rectangle: Draw filled rectangles
+  - Flood Fill: Fill connected areas
+- Layer panel:
+  - Entities and Tilemap layers with visibility toggles
+  - Active layer selection
+  - Tilemap settings display
+- Integrated into Levels tab
+
 ### Bug Fixes & Features
 - Fixed entity position reset bug (sync displayLevel with history)
 - Added snap-to-grid toggle and grid options to Edit menu

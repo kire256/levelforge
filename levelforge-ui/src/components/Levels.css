@@ -550,3 +550,107 @@
   .toolbar-left h2 { font-size: 1rem; }
   .project-name { display: none; }
 }
+
+/* Layers Panel */
+.layers-list {
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.layer-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--bg-secondary);
+  border: 2px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.layer-item:hover {
+  background: var(--bg-hover);
+}
+
+.layer-item.active {
+  border-color: var(--accent-color);
+  background: var(--accent-bg);
+}
+
+.layer-visibility-btn {
+  background: none;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  opacity: 0.6;
+  transition: opacity 0.15s;
+}
+
+.layer-visibility-btn:hover {
+  opacity: 1;
+}
+
+.layer-icon {
+  font-size: 16px;
+}
+
+.layer-name {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.layer-count {
+  font-size: 11px;
+  color: var(--text-secondary);
+  background: var(--bg-tertiary);
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+/* Tilemap Settings */
+.tilemap-settings {
+  padding: 12px 16px;
+  border-top: 1px solid var(--border-color);
+  margin-top: 8px;
+}
+
+.tilemap-settings h4 {
+  margin: 0 0 12px 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.tilemap-settings .setting-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  font-size: 12px;
+}
+
+.tilemap-settings .setting-row span:first-child {
+  color: var(--text-secondary);
+}
+
+.tilemap-hint {
+  margin: 12px 0 0;
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+/* Canvas Area */
+.canvas-area {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.canvas-area .canvas-view {
+  flex: 1;
+  overflow: hidden;
+}

@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import LevelView from './LevelView'
 import EntityRequirements from './EntityRequirements'
+import TilemapCanvas, { TOOLS } from './TilemapCanvas'
+import TilePalette from './TilePalette'
 import './Levels.css'
 
 const GENRES = [
@@ -15,6 +17,12 @@ const DIFFICULTIES = [
   { id: 'hard', name: 'Hard', color: '#f97316' },
   { id: 'expert', name: 'Expert', color: '#ef4444' },
 ]
+
+// Layer types
+const LAYERS = {
+  ENTITIES: 'entities',
+  TILEMAP: 'tilemap',
+}
 
 export default function Levels({
   currentProject,
@@ -57,10 +65,43 @@ export default function Levels({
   const [entityRequirements, setEntityRequirements] = useState([])
   
   // Sidebar tab state
-  const [sidebarTab, setSidebarTab] = useState('levels') // 'levels' or 'objects'
+  const [sidebarTab, setSidebarTab] = useState('layers') // 'layers', 'levels', or 'objects'
+  
+  // Layer visibility
+  const [layerVisibility, setLayerVisibility] = useState({
+    [LAYERS.ENTITIES]: true,
+    [LAYERS.TILEMAP]: true,
+  })
+  const [activeLayer, setActiveLayer] = useState(LAYERS.ENTITIES)
+  
+  // Tilemap state
+  const [tileTypes, setTileTypes] = useState([])
+  const [selectedTileId, setSelectedTileId] = useState(null)
+  const [selectedTool, setSelectedTool] = useState(TOOLS.PENCIL)
   
   // Load entity types when project changes
   const [entityTypes, setEntityTypes] = useState([])
+  
+  // Load entity and tile types when project changes
+  useEffect(() => {
+    if (currentProject) {
+      fetch(`http://192.168.68.72:8000/api/projects/${currentProject.id}/entity-types`)
+        .then(res => res.json())
+        .then(data => setEntityTypes(data))
+        .catch(err => console.error('Failed to load entity types:', err))
+      
+      fetch(`http://192.168.68.72:8000/api/projects/${currentProject.id}/tile-types`)
+        .then(res => res.json())
+        .then(data => {
+          setTileTypes(data)
+          // Auto-select first tile if available
+          if (data.length > 0 && selectedTileId === null) {
+            setSelectedTileId(data[0].id)
+          }
+        })
+        .catch(err => console.error('Failed to load tile types:', err))
+    }
+  }, [currentProject])
   
   useEffect(() => {
     if (currentProject) {
@@ -256,6 +297,12 @@ export default function Levels({
             {/* Sidebar Tabs */}
             <div className="sidebar-tabs">
               <button 
+                className={`sidebar-tab ${sidebarTab === 'layers' ? 'active' : ''}`}
+                onClick={() => setSidebarTab('layers')}
+              >
+                📑 Layers
+              </button>
+              <button 
                 className={`sidebar-tab ${sidebarTab === 'levels' ? 'active' : ''}`}
                 onClick={() => setSidebarTab('levels')}
               >
@@ -268,6 +315,79 @@ export default function Levels({
                 📦 Objects
               </button>
             </div>
+            
+            {/* Layers Tab Content */}
+            {sidebarTab === 'layers' && (
+              <>
+                <div className="levels-sidebar-header">
+                  <h3>Level Layers</h3>
+                  {!currentLevel && <span className="hint-text">Select a level</span>}
+                </div>
+                <div className="layers-list">
+                  {/* Entities Layer */}
+                  <div 
+                    className={`layer-item ${activeLayer === LAYERS.ENTITIES ? 'active' : ''}`}
+                    onClick={() => setActiveLayer(LAYERS.ENTITIES)}
+                  >
+                    <button 
+                      className="layer-visibility-btn"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setLayerVisibility(v => ({ ...v, [LAYERS.ENTITIES]: !v[LAYERS.ENTITIES] }))
+                      }}
+                      title={layerVisibility[LAYERS.ENTITIES] ? 'Hide layer' : 'Show layer'}
+                    >
+                      {layerVisibility[LAYERS.ENTITIES] ? '👁️' : '👁️‍🗨️'}
+                    </button>
+                    <span className="layer-icon">🧑</span>
+                    <span className="layer-name">Entities</span>
+                    <span className="layer-count">
+                      {currentLevelData?.entities?.length || 0}
+                    </span>
+                  </div>
+                  
+                  {/* Tilemap Layer */}
+                  <div 
+                    className={`layer-item ${activeLayer === LAYERS.TILEMAP ? 'active' : ''}`}
+                    onClick={() => setActiveLayer(LAYERS.TILEMAP)}
+                  >
+                    <button 
+                      className="layer-visibility-btn"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setLayerVisibility(v => ({ ...v, [LAYERS.TILEMAP]: !v[LAYERS.TILEMAP] }))
+                      }}
+                      title={layerVisibility[LAYERS.TILEMAP] ? 'Hide layer' : 'Show layer'}
+                    >
+                      {layerVisibility[LAYERS.TILEMAP] ? '👁️' : '👁️‍🗨️'}
+                    </button>
+                    <span className="layer-icon">🟫</span>
+                    <span className="layer-name">Tilemap</span>
+                    <span className="layer-count">
+                      {currentLevelData?.tilemap ? `${currentLevelData.tilemap.width}x${currentLevelData.tilemap.height}` : '—'}
+                    </span>
+                  </div>
+                </div>
+                
+                {/* Tilemap Settings (when tilemap layer is active) */}
+                {activeLayer === LAYERS.TILEMAP && currentLevel && (
+                  <div className="tilemap-settings">
+                    <h4>Tilemap Settings</h4>
+                    <div className="setting-row">
+                      <span>Tile Size</span>
+                      <span>{currentProject?.tile_size || 32}px</span>
+                    </div>
+                    <div className="setting-row">
+                      <span>Tile Types</span>
+                      <span>{tileTypes.length}</span>
+                    </div>
+                    <p className="tilemap-hint">
+                      Select a tile type from the right palette and draw on the canvas.
+                    </p>
+                  </div>
+                )}
+              </>
+            )}
             
             {/* Levels Tab Content */}
             {sidebarTab === 'levels' && (
@@ -422,20 +542,51 @@ export default function Levels({
 
           <section className="levels-center">
             {viewMode === 'canvas' && (
-              <div className="canvas-view">
+              <div className="canvas-area">
                 {currentLevel ? (
-                  <LevelView 
-                    level={currentLevel} 
-                    mode="draft" 
-                    entityTypes={entityTypes || []} 
-                    onRename={onRenameLevel}
-                    selectedObject={activeSelectedObject}
-                    onSelectObject={handleSelectObject}
-                    onUpdateObject={onUpdateObject}
-                    snapToGrid={snapToGrid}
-                    showGrid={showGrid}
-                    gridSize={gridSize}
-                  />
+                  <>
+                    {/* Main Canvas */}
+                    <div className="canvas-view">
+                      {activeLayer === LAYERS.ENTITIES ? (
+                        <LevelView 
+                          level={currentLevel} 
+                          mode="draft" 
+                          entityTypes={entityTypes || []} 
+                          onRename={onRenameLevel}
+                          selectedObject={activeSelectedObject}
+                          onSelectObject={handleSelectObject}
+                          onUpdateObject={onUpdateObject}
+                          snapToGrid={snapToGrid}
+                          showGrid={showGrid}
+                          gridSize={gridSize}
+                        />
+                      ) : (
+                        <TilemapCanvas
+                          tilemap={currentLevelData?.tilemap || { width: 50, height: 30, data: [] }}
+                          tileTypes={tileTypes}
+                          selectedTileId={selectedTileId}
+                          tool={selectedTool}
+                          tileSize={currentProject?.tile_size || 32}
+                          showGrid={showGrid}
+                          onTileChange={(x, y, tileId) => {
+                            // TODO: Implement tile change persistence
+                            console.log('Tile change:', x, y, tileId)
+                          }}
+                        />
+                      )}
+                    </div>
+                    
+                    {/* Tile Palette (shown when tilemap layer is active) */}
+                    {activeLayer === LAYERS.TILEMAP && (
+                      <TilePalette
+                        tileTypes={tileTypes}
+                        selectedTileId={selectedTileId}
+                        onSelectTile={setSelectedTileId}
+                        selectedTool={selectedTool}
+                        onSelectTool={setSelectedTool}
+                      />
+                    )}
+                  </>
                 ) : (
                   <div className="no-selection">
                     <div className="empty-icon">🎨</div>
