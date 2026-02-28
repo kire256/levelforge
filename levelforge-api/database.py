@@ -78,6 +78,13 @@ def init_db():
         )
     """)
     
+    # Migrations: Add columns if they don't exist
+    # Check if tile_size column exists in projects
+    cursor.execute("PRAGMA table_info(projects)")
+    columns = [col[1] for col in cursor.fetchall()]
+    if 'tile_size' not in columns:
+        cursor.execute("ALTER TABLE projects ADD COLUMN tile_size INTEGER DEFAULT 32")
+    
     conn.commit()
     conn.close()
 
