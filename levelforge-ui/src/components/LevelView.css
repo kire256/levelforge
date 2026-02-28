@@ -9,6 +9,7 @@
 
 .level-view.non-interactive {
   pointer-events: none;
+  background: transparent !important;
 }
 
 .level-view.non-interactive .level-toolbar,

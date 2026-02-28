@@ -22,10 +22,12 @@ export default function TilemapCanvas({
   interactive = true,
 }) {
   const canvasRef = useRef(null)
+  const containerRef = useRef(null)
   const [zoom, setZoom] = useState(1)
   const [pan, setPan] = useState({ x: 0, y: 0 })
   const [isPanning, setIsPanning] = useState(false)
   const [panStart, setPanStart] = useState({ x: 0, y: 0 })
+  const [canvasSize, setCanvasSize] = useState({ width: 1200, height: 800 })
   
   // Drawing state
   const [isDrawing, setIsDrawing] = useState(false)
@@ -46,13 +48,39 @@ export default function TilemapCanvas({
     return lookup
   }, [tileTypes])
   
+  // Resize canvas to match container
+  useEffect(() => {
+    const resizeCanvas = () => {
+      if (containerRef.current) {
+        const rect = containerRef.current.getBoundingClientRect()
+        setCanvasSize({ 
+          width: Math.floor(rect.width), 
+          height: Math.floor(rect.height) 
+        })
+      }
+    }
+    
+    resizeCanvas()
+    window.addEventListener('resize', resizeCanvas)
+    return () => window.removeEventListener('resize', resizeCanvas)
+  }, [])
+  
   // Convert screen coordinates to tile coordinates
   const screenToTile = useCallback((screenX, screenY) => {
     const canvas = canvasRef.current
     if (!canvas) return null
     
-    const tileX = Math.floor((screenX - pan.x) / (tileSize * zoom))
-    const tileY = Math.floor((screenY - pan.y) / (tileSize * zoom))
+    // Get the actual rendered size of the canvas
+    const rect = canvas.getBoundingClientRect()
+    const scaleX = canvas.width / rect.width
+    const scaleY = canvas.height / rect.height
+    
+    // Convert to canvas coordinates
+    const canvasX = screenX * scaleX
+    const canvasY = screenY * scaleY
+    
+    const tileX = Math.floor((canvasX - pan.x) / (tileSize * zoom))
+    const tileY = Math.floor((canvasY - pan.y) / (tileSize * zoom))
     
     if (tileX < 0 || tileX >= width || tileY < 0 || tileY >= height) {
       return null
@@ -213,18 +241,20 @@ export default function TilemapCanvas({
     if (!canvas) return
     
     const ctx = canvas.getContext('2d')
+    const canvasW = canvasSize.width
+    const canvasH = canvasSize.height
     
     // Clear canvas
     ctx.fillStyle = '#1a1a2e'
-    ctx.fillRect(0, 0, canvas.width, canvas.height)
+    ctx.fillRect(0, 0, canvasW, canvasH)
     
     const scaledTileSize = tileSize * zoom
     
     // Calculate visible tile range for culling
     const startTileX = Math.max(0, Math.floor(-pan.x / scaledTileSize))
     const startTileY = Math.max(0, Math.floor(-pan.y / scaledTileSize))
-    const endTileX = Math.min(width, Math.ceil((canvas.width - pan.x) / scaledTileSize))
-    const endTileY = Math.min(height, Math.ceil((canvas.height - pan.y) / scaledTileSize))
+    const endTileX = Math.min(width, Math.ceil((canvasW - pan.x) / scaledTileSize))
+    const endTileY = Math.min(height, Math.ceil((canvasH - pan.y) / scaledTileSize))
     
     // Draw tiles
     for (let y = startTileY; y < endTileY; y++) {
@@ -255,7 +285,7 @@ export default function TilemapCanvas({
         const screenX = x * scaledTileSize + pan.x
         ctx.beginPath()
         ctx.moveTo(screenX, 0)
-        ctx.lineTo(screenX, canvas.height)
+        ctx.lineTo(screenX, canvasH)
         ctx.stroke()
       }
       
@@ -263,13 +293,13 @@ export default function TilemapCanvas({
         const screenY = y * scaledTileSize + pan.y
         ctx.beginPath()
         ctx.moveTo(0, screenY)
-        ctx.lineTo(canvas.width, screenY)
+        ctx.lineTo(canvasW, screenY)
         ctx.stroke()
       }
     }
     
     // Draw hover highlight
-    if (currentTile && !isPanning) {
+    if (currentTile && !isPanning && interactive) {
       const screenX = currentTile.tileX * scaledTileSize + pan.x
       const screenY = currentTile.tileY * scaledTileSize + pan.y
       
@@ -304,7 +334,7 @@ export default function TilemapCanvas({
     ctx.fillStyle = '#fff'
     ctx.font = '12px monospace'
     ctx.fillText(`Size: ${width}x${height}`, 14, 24)
-  }, [data, tileTypeLookup, tileSize, zoom, pan, showGrid, currentTile, isPanning, tool, isDrawing, drawStart, selectedTileId, width, height])
+  }, [data, tileTypeLookup, tileSize, zoom, pan, showGrid, currentTile, isPanning, tool, isDrawing, drawStart, selectedTileId, width, height, canvasSize, interactive])
   
   // Trigger render on changes
   useEffect(() => {
@@ -342,7 +372,7 @@ export default function TilemapCanvas({
   }
   
   return (
-    <div className={`tilemap-canvas-container ${!interactive ? 'non-interactive' : ''}`}>
+    <div ref={containerRef} className={`tilemap-canvas-container ${!interactive ? 'non-interactive' : ''}`}>
       {/* Controls */}
       <div className="canvas-controls">
         <button onClick={handleZoomOut} title="Zoom Out">➖</button>
@@ -354,8 +384,8 @@ export default function TilemapCanvas({
       {/* Canvas */}
       <canvas
         ref={canvasRef}
-        width={1200}
-        height={800}
+        width={canvasSize.width}
+        height={canvasSize.height}
         className="tilemap-canvas"
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
@@ -370,7 +400,7 @@ export default function TilemapCanvas({
       />
       
       {/* Coordinates display */}
-      {currentTile && (
+      {currentTile && interactive && (
         <div className="tile-coords">
           Tile: ({currentTile.tileX}, {currentTile.tileY})
         </div>
