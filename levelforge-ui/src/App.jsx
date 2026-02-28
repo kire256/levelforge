@@ -244,8 +244,10 @@ function App() {
       const res = await fetch(`${API_BASE}/api/projects/${projectId}/levels`)
       const data = await res.json()
       setLevels(data)
+      return data
     } catch (err) {
       console.error('Failed to load levels:', err)
+      return []
     }
   }
   
@@ -307,11 +309,29 @@ function App() {
     }
   }
   
-  const handleSelectProject = (project) => {
+  const handleSelectProject = async (project) => {
     setCurrentProject(project)
     setSelectedItem({ type: 'Project', name: project.name, ...project })
-    loadLevels(project.id)
+    
+    // Load levels and auto-select most recent
+    const loadedLevels = await loadLevels(project.id)
     loadEntityTypes(project.id)
+    
+    // Check for recently selected level
+    const recentLevelKey = `levelforge-recent-level-${project.id}`
+    const recentLevelStr = localStorage.getItem(recentLevelKey)
+    if (recentLevelStr && loadedLevels.length > 0) {
+      try {
+        const recentLevel = JSON.parse(recentLevelStr)
+        const levelToSelect = loadedLevels.find(l => l.id === recentLevel.id)
+        if (levelToSelect) {
+          handleSetCurrentLevel(levelToSelect)
+          setSelectedItem({ type: 'Level', ...levelToSelect })
+        }
+      } catch (e) {
+        // Ignore parse errors
+      }
+    }
     
     // Update recent projects
     const updated = [{ id: project.id, name: project.name, timestamp: Date.now() }, 
@@ -496,6 +516,14 @@ function App() {
   const handleSelectLevel = (level) => {
     handleSetCurrentLevel(level)
     setSelectedItem({ type: 'Level', ...level })
+    
+    // Save as most recent level for this project
+    if (currentProject?.id && level?.id) {
+      localStorage.setItem(`levelforge-recent-level-${currentProject.id}`, JSON.stringify({
+        id: level.id,
+        timestamp: Date.now()
+      }))
+    }
   }
 
   const handleRenameLevel = async (level) => {
