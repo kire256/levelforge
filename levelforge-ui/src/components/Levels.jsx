@@ -596,6 +596,13 @@ export default function Levels({
                           >
                             🪣
                           </button>
+                          <button
+                            className={`tool-btn ${selectedTool === TOOLS.PAN ? 'active' : ''}`}
+                            onClick={() => setSelectedTool(TOOLS.PAN)}
+                            title="Pan (Space)"
+                          >
+                            ✋
+                          </button>
                         </div>
                         
                         <div className="toolbar-divider" />
