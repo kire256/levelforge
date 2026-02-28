@@ -12,6 +12,14 @@
   background: transparent !important;
 }
 
+.level-view.non-interactive .canvas-container {
+  background: transparent !important;
+}
+
+.level-view.non-interactive .level-canvas {
+  background: transparent !important;
+}
+
 .level-view.non-interactive .level-toolbar,
 .level-view.non-interactive .view-mode-bar,
 .level-view.non-interactive .level-info-panel,
