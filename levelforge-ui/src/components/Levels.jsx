@@ -569,7 +569,7 @@ export default function Levels({
                     <div className="canvas-view layered-canvas">
                       {/* Tilemap Layer (renders first, underneath) */}
                       {layerVisibility[LAYERS.TILEMAP] && (
-                        <div className="canvas-layer tilemap-layer">
+                        <div className={`canvas-layer tilemap-layer ${activeLayer === LAYERS.TILEMAP ? 'interactive' : ''}`}>
                           <TilemapCanvas
                             tilemap={tilemapData || { width: 50, height: 30, data: [] }}
                             tileTypes={tileTypes}
@@ -585,7 +585,7 @@ export default function Levels({
                       
                       {/* Entities Layer (renders on top) */}
                       {layerVisibility[LAYERS.ENTITIES] && (
-                        <div className="canvas-layer entities-layer">
+                        <div className={`canvas-layer entities-layer ${activeLayer === LAYERS.ENTITIES ? 'interactive' : ''}`}>
                           <LevelView 
                             level={currentLevel} 
                             mode="draft" 
