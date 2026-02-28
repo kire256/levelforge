@@ -103,20 +103,6 @@ export default function Levels({
         .catch(err => console.error('Failed to load tile types:', err))
     }
   }, [currentProject])
-  
-  // Sync tilemap data with current level
-  useEffect(() => {
-    if (currentLevelData?.tilemap) {
-      setTilemapData(currentLevelData.tilemap)
-    } else {
-      // Default empty tilemap
-      setTilemapData({
-        width: 50,
-        height: 30,
-        data: Array(30).fill(null).map(() => Array(50).fill(null))
-      })
-    }
-  }, [currentLevelData?.tilemap])
 
   useEffect(() => {
     if (externalViewMode !== undefined) setViewMode(externalViewMode)
@@ -177,6 +163,20 @@ export default function Levels({
   } catch {
     currentLevelData = null
   }
+  
+  // Sync tilemap data with current level
+  useEffect(() => {
+    if (currentLevelData?.tilemap) {
+      setTilemapData(currentLevelData.tilemap)
+    } else if (currentLevel) {
+      // Default empty tilemap when a level is selected but has no tilemap
+      setTilemapData({
+        width: 50,
+        height: 30,
+        data: Array(30).fill(null).map(() => Array(50).fill(null))
+      })
+    }
+  }, [currentLevel, currentLevelData?.tilemap])
   
   // Group entities by type for object hierarchy
   const entityGroups = useMemo(() => {
