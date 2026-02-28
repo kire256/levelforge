@@ -82,24 +82,28 @@ export default function TilemapCanvas({
     const canvas = canvasRef.current
     if (!canvas) return null
     
-    // Get the actual rendered size of the canvas
-    const rect = canvas.getBoundingClientRect()
-    const scaleX = canvas.width / rect.width
-    const scaleY = canvas.height / rect.height
+    const canvasW = canvasSize.width
+    const canvasH = canvasSize.height
+    const scaledTileSize = tileSize * zoom
     
-    // Convert to canvas coordinates
-    const canvasX = screenX * scaleX
-    const canvasY = screenY * scaleY
+    // Calculate tilemap bounds for centering (same as render)
+    const tilemapPixelWidth = width * scaledTileSize
+    const tilemapPixelHeight = height * scaledTileSize
     
-    const tileX = Math.floor((canvasX - pan.x) / (tileSize * zoom))
-    const tileY = Math.floor((canvasY - pan.y) / (tileSize * zoom))
+    // Center offset
+    const centerX = canvasW / 2 - tilemapPixelWidth / 2 + pan.x
+    const centerY = canvasH / 2 - tilemapPixelHeight / 2 + pan.y
+    
+    // Convert to tile coordinates
+    const tileX = Math.floor((screenX - centerX) / scaledTileSize)
+    const tileY = Math.floor((screenY - centerY) / scaledTileSize)
     
     if (tileX < 0 || tileX >= width || tileY < 0 || tileY >= height) {
       return null
     }
     
     return { tileX, tileY }
-  }, [pan, tileSize, zoom, width, height])
+  }, [pan, tileSize, zoom, width, height, canvasSize])
   
   // Get tile at position
   const getTileAt = useCallback((tileX, tileY) => {
@@ -262,18 +266,26 @@ export default function TilemapCanvas({
     
     const scaledTileSize = tileSize * zoom
     
+    // Calculate tilemap bounds for centering (similar to LevelView)
+    const tilemapPixelWidth = width * scaledTileSize
+    const tilemapPixelHeight = height * scaledTileSize
+    
+    // Center offset (like LevelView does for entities)
+    const centerX = canvasW / 2 - tilemapPixelWidth / 2 + pan.x
+    const centerY = canvasH / 2 - tilemapPixelHeight / 2 + pan.y
+    
     // Calculate visible tile range for culling
-    const startTileX = Math.max(0, Math.floor(-pan.x / scaledTileSize))
-    const startTileY = Math.max(0, Math.floor(-pan.y / scaledTileSize))
-    const endTileX = Math.min(width, Math.ceil((canvasW - pan.x) / scaledTileSize))
-    const endTileY = Math.min(height, Math.ceil((canvasH - pan.y) / scaledTileSize))
+    const startTileX = Math.max(0, Math.floor(-centerX / scaledTileSize))
+    const startTileY = Math.max(0, Math.floor(-centerY / scaledTileSize))
+    const endTileX = Math.min(width, Math.ceil((canvasW - centerX) / scaledTileSize))
+    const endTileY = Math.min(height, Math.ceil((canvasH - centerY) / scaledTileSize))
     
     // Draw tiles
     for (let y = startTileY; y < endTileY; y++) {
       for (let x = startTileX; x < endTileX; x++) {
         const tileId = data[y]?.[x]
-        const screenX = x * scaledTileSize + pan.x
-        const screenY = y * scaledTileSize + pan.y
+        const screenX = x * scaledTileSize + centerX
+        const screenY = y * scaledTileSize + centerY
         
         if (tileId && tileTypeLookup[tileId]) {
           const tileType = tileTypeLookup[tileId]
@@ -294,7 +306,7 @@ export default function TilemapCanvas({
       ctx.lineWidth = 1
       
       for (let x = startTileX; x <= endTileX; x++) {
-        const screenX = x * scaledTileSize + pan.x
+        const screenX = x * scaledTileSize + centerX
         ctx.beginPath()
         ctx.moveTo(screenX, 0)
         ctx.lineTo(screenX, canvasH)
@@ -302,7 +314,7 @@ export default function TilemapCanvas({
       }
       
       for (let y = startTileY; y <= endTileY; y++) {
-        const screenY = y * scaledTileSize + pan.y
+        const screenY = y * scaledTileSize + centerY
         ctx.beginPath()
         ctx.moveTo(0, screenY)
         ctx.lineTo(canvasW, screenY)
@@ -312,8 +324,8 @@ export default function TilemapCanvas({
     
     // Draw hover highlight
     if (currentTile && !isPanning && interactive) {
-      const screenX = currentTile.tileX * scaledTileSize + pan.x
-      const screenY = currentTile.tileY * scaledTileSize + pan.y
+      const screenX = currentTile.tileX * scaledTileSize + centerX
+      const screenY = currentTile.tileY * scaledTileSize + centerY
       
       ctx.strokeStyle = '#6366f1'
       ctx.lineWidth = 2
@@ -321,8 +333,8 @@ export default function TilemapCanvas({
       
       // Show preview for rect tool
       if (tool === TOOLS.RECT && isDrawing && drawStart) {
-        const startX = Math.min(drawStart.tileX, currentTile.tileX) * scaledTileSize + pan.x
-        const startY = Math.min(drawStart.tileY, currentTile.tileY) * scaledTileSize + pan.y
+        const startX = Math.min(drawStart.tileX, currentTile.tileX) * scaledTileSize + centerX
+        const startY = Math.min(drawStart.tileY, currentTile.tileY) * scaledTileSize + centerY
         const rectWidth = (Math.abs(currentTile.tileX - drawStart.tileX) + 1) * scaledTileSize
         const rectHeight = (Math.abs(currentTile.tileY - drawStart.tileY) + 1) * scaledTileSize
         
