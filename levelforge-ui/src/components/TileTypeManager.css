@@ -11,11 +11,18 @@
   align-items: center;
   padding: 12px 16px;
   border-bottom: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
 }
 
 .tile-type-header h3 {
   margin: 0;
   font-size: 14px;
+  font-weight: 600;
+}
+
+.tile-type-header .btn-primary {
+  background: var(--accent-color);
+  color: white !important;
   font-weight: 600;
 }
 
@@ -127,10 +134,21 @@
 }
 
 .no-tiles {
-  padding: 12px;
+  padding: 16px 12px;
   text-align: center;
   color: var(--text-secondary);
   font-size: 12px;
+}
+
+.no-tiles p {
+  margin: 0 0 10px;
+}
+
+.empty-create-btn {
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 12px;
+  color: white !important;
 }
 
 /* Form Modal */
@@ -294,7 +312,7 @@
 .btn-small {
   padding: 6px 12px;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 600;
   border-radius: 6px;
   border: none;
   cursor: pointer;
@@ -303,7 +321,7 @@
 
 .btn-primary {
   background: var(--accent-color);
-  color: white;
+  color: white !important;
 }
 
 .btn-primary:hover {

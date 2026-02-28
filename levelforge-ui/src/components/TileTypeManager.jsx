@@ -221,7 +221,15 @@ export default function TileTypeManager({
                   </div>
                 ))}
                 {tiles.length === 0 && cat.id === 'terrain' && (
-                  <div className="no-tiles">No tiles yet</div>
+                  <div className="no-tiles">
+                    <p>No tiles yet</p>
+                    <button
+                      className="btn-primary empty-create-btn"
+                      onClick={() => { setShowCreateForm(true); setEditingTile(null); }}
+                    >
+                      + Create First Tile Type
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
