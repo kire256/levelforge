@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import TileTypeManager from './TileTypeManager'
 import './Settings.css'
 
 export default function Settings({ 
@@ -13,13 +14,55 @@ export default function Settings({
   onAccentChange
 }) {
   const [activeSection, setActiveSection] = useState('project')
+  const [tileTypes, setTileTypes] = useState([])
+  const [tileSize, setTileSize] = useState(32)
+  const [savingTileSize, setSavingTileSize] = useState(false)
   
   const sections = [
     { id: 'project', label: 'Project', icon: '📁' },
+    { id: 'tiles', label: 'Tile Types', icon: '🟫' },
     { id: 'ai', label: 'AI Settings', icon: '🤖' },
     { id: 'ui', label: 'UI & Themes', icon: '🎨' },
     { id: 'export', label: 'Export', icon: '📤' },
   ]
+  
+  // Load tile types when project changes
+  useEffect(() => {
+    if (currentProject) {
+      loadTileTypes()
+      setTileSize(currentProject.tile_size || 32)
+    }
+  }, [currentProject])
+  
+  const loadTileTypes = async () => {
+    if (!currentProject) return
+    try {
+      const res = await fetch(`http://192.168.68.72:8000/api/projects/${currentProject.id}/tile-types`)
+      const data = await res.json()
+      setTileTypes(data)
+    } catch (err) {
+      console.error('Failed to load tile types:', err)
+    }
+  }
+  
+  const handleTileSizeChange = async (newSize) => {
+    setTileSize(newSize)
+    if (!currentProject) return
+    
+    setSavingTileSize(true)
+    try {
+      const res = await fetch(`http://192.168.68.72:8000/api/projects/${currentProject.id}/tile-size`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tile_size: newSize })
+      })
+      if (!res.ok) throw new Error('Failed to update tile size')
+    } catch (err) {
+      console.error('Failed to update tile size:', err)
+    } finally {
+      setSavingTileSize(false)
+    }
+  }
   
   const themes = [
     { id: 'dark', label: 'Dark', icon: '🌙' },
@@ -86,6 +129,48 @@ export default function Settings({
                   </div>
                   <button className="save-btn">Save Changes</button>
                 </div>
+              ) : (
+                <p className="no-project">No project selected. Choose a project from the Dashboard.</p>
+              )}
+            </section>
+          )}
+          
+          {activeSection === 'tiles' && (
+            <section className="settings-section tile-settings">
+              <h2>Tile Settings</h2>
+              {currentProject ? (
+                <>
+                  <div className="settings-form">
+                    <div className="field">
+                      <label>Tile Size (pixels)</label>
+                      <div className="tile-size-options">
+                        {[16, 24, 32, 48, 64].map(size => (
+                          <button
+                            key={size}
+                            className={`tile-size-btn ${tileSize === size ? 'active' : ''}`}
+                            onClick={() => handleTileSizeChange(size)}
+                            disabled={savingTileSize}
+                          >
+                            {size}px
+                          </button>
+                        ))}
+                      </div>
+                      <span className="hint">Grid size for tilemaps in this project</span>
+                    </div>
+                  </div>
+                  
+                  <div className="tile-types-section">
+                    <h3>Tile Types</h3>
+                    <p className="section-desc">
+                      Define tile types for your project's tilemaps. Each tile type has properties like color, collision, and friction.
+                    </p>
+                    <TileTypeManager
+                      projectId={currentProject.id}
+                      tileTypes={tileTypes}
+                      onRefresh={loadTileTypes}
+                    />
+                  </div>
+                </>
               ) : (
                 <p className="no-project">No project selected. Choose a project from the Dashboard.</p>
               )}

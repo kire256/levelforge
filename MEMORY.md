@@ -166,6 +166,36 @@ See GitHub issues #16-27 for remaining features. Prioritized:
 - Repo: https://github.com/kire256/levelforge.git
 - Latest commit: Object selection, dragging, inspector editing
 
+## Recent Session (2026-02-28)
+
+### Tilemap System Design
+- Created design doc: `docs/TILEMAP_DESIGN.md`
+- Key decisions:
+  - Integrated into Levels tab (not separate)
+  - Two layers: Tilemap + Entities with visibility toggles
+  - Single tilemap per level, fixed tile size per project
+  - Colors for preview (textures later)
+  - Tilemaps handle collision
+  - AI generates for new levels only
+
+### Phase 1 Implementation (Tilemap Infrastructure)
+- Added `tile_size` column to projects table
+- Created `tile_types` table with properties:
+  - name, color, description, collision_type, friction, damage, category, metadata
+- API endpoints:
+  - `GET/POST /api/projects/:id/tile-types`
+  - `GET/PUT/DELETE /api/tile-types/:id`
+  - `PUT /api/projects/:id/tile-size`
+- TileTypeManager component (create/edit tile types with modal form)
+- Integrated into Settings > "Tile Types" section
+- Tile size selector (16/24/32/48/64px)
+
+### Bug Fixes & Features
+- Fixed entity position reset bug (sync displayLevel with history)
+- Added snap-to-grid toggle and grid options to Edit menu
+- Grid size presets: 10/25/50/100px
+- All grid settings persist in localStorage
+
 ## Recent Session (2026-02-27)
 
 ### Major Features Implemented

@@ -773,6 +773,115 @@ async def delete_entity_type(entity_type_id: int):
     return {"success": True}
 
 
+# Tile Type endpoints
+class CreateTileTypeRequest(BaseModel):
+    name: str
+    color: str = '#808080'
+    description: str = None
+    collision_type: str = 'solid'
+    friction: float = 1.0
+    damage: int = 0
+    category: str = 'terrain'
+    metadata: str = '{}'
+
+
+class UpdateTileTypeRequest(BaseModel):
+    name: str = None
+    color: str = None
+    description: str = None
+    collision_type: str = None
+    friction: float = None
+    damage: int = None
+    category: str = None
+    metadata: str = None
+
+
+class UpdateTileSizeRequest(BaseModel):
+    tile_size: int
+
+
+@app.post("/api/projects/{project_id}/tile-types")
+async def create_tile_type(project_id: int, request: CreateTileTypeRequest):
+    """Create a new tile type for a project."""
+    import database as db
+    
+    project = db.get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    tile_type_id = db.create_tile_type(
+        project_id=project_id,
+        name=request.name,
+        color=request.color,
+        description=request.description,
+        collision_type=request.collision_type,
+        friction=request.friction,
+        damage=request.damage,
+        category=request.category,
+        metadata=request.metadata
+    )
+    return {"id": tile_type_id, "name": request.name}
+
+
+@app.get("/api/projects/{project_id}/tile-types")
+async def get_tile_types(project_id: int):
+    """Get all tile types for a project."""
+    import database as db
+    return db.get_tile_types(project_id)
+
+
+@app.get("/api/tile-types/{tile_type_id}")
+async def get_tile_type(tile_type_id: int):
+    """Get a single tile type."""
+    import database as db
+    tile_type = db.get_tile_type(tile_type_id)
+    if not tile_type:
+        raise HTTPException(status_code=404, detail="Tile type not found")
+    return tile_type
+
+
+@app.put("/api/tile-types/{tile_type_id}")
+async def update_tile_type(tile_type_id: int, request: UpdateTileTypeRequest):
+    """Update a tile type."""
+    import database as db
+    success = db.update_tile_type(
+        tile_type_id,
+        name=request.name,
+        color=request.color,
+        description=request.description,
+        collision_type=request.collision_type,
+        friction=request.friction,
+        damage=request.damage,
+        category=request.category,
+        metadata=request.metadata
+    )
+    if not success:
+        raise HTTPException(status_code=404, detail="Tile type not found")
+    return {"success": True}
+
+
+@app.delete("/api/tile-types/{tile_type_id}")
+async def delete_tile_type(tile_type_id: int):
+    """Delete a tile type."""
+    import database as db
+    success = db.delete_tile_type(tile_type_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Tile type not found")
+    return {"success": True}
+
+
+@app.put("/api/projects/{project_id}/tile-size")
+async def update_project_tile_size(project_id: int, request: UpdateTileSizeRequest):
+    """Update a project's tile size."""
+    import database as db
+    if request.tile_size < 8 or request.tile_size > 128:
+        raise HTTPException(status_code=400, detail="Tile size must be between 8 and 128")
+    success = db.update_project_tile_size(project_id, request.tile_size)
+    if not success:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return {"success": True, "tile_size": request.tile_size}
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

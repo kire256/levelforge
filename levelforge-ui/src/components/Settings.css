@@ -239,3 +239,58 @@
   color: var(--text-secondary);
   font-style: italic;
 }
+
+/* Tile Settings */
+.tile-settings {
+  max-width: 600px;
+}
+
+.tile-size-options {
+  display: flex;
+  gap: 8px;
+}
+
+.tile-size-btn {
+  padding: 10px 16px;
+  background: var(--tab-active);
+  border: 2px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: all 0.15s;
+}
+
+.tile-size-btn:hover {
+  border-color: var(--text-secondary);
+}
+
+.tile-size-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
+.tile-size-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.tile-types-section {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+}
+
+.tile-types-section h3 {
+  margin: 0 0 8px 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.tile-types-section .section-desc {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  margin-bottom: 16px;
+}
