@@ -60,21 +60,24 @@ export default function TilemapCanvas({
     return lookup
   }, [tileTypes])
   
-  // Resize canvas to match container
+  // Resize canvas to match container (ResizeObserver catches toolbar show/hide too)
   useEffect(() => {
     const resizeCanvas = () => {
       if (containerRef.current) {
         const rect = containerRef.current.getBoundingClientRect()
-        setCanvasSize({ 
-          width: Math.floor(rect.width), 
-          height: Math.floor(rect.height) 
-        })
+        if (rect.width > 0 && rect.height > 0) {
+          setCanvasSize({
+            width: Math.floor(rect.width),
+            height: Math.floor(rect.height)
+          })
+        }
       }
     }
-    
+
     resizeCanvas()
-    window.addEventListener('resize', resizeCanvas)
-    return () => window.removeEventListener('resize', resizeCanvas)
+    const observer = new ResizeObserver(resizeCanvas)
+    if (containerRef.current) observer.observe(containerRef.current)
+    return () => observer.disconnect()
   }, [])
   
   // Convert screen coordinates to tile coordinates

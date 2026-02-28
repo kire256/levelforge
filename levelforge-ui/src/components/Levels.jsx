@@ -43,10 +43,11 @@ export default function Levels({
   selectedObject,
   onSelectObject,
   onUpdateObject,
+  onTilemapChange,
   // Grid settings
   snapToGrid = false,
   showGrid = true,
-  gridSize = 50,
+  gridSize = 32,
 }) {
   const [viewMode, setViewMode] = useState(externalViewMode ?? 'canvas') // canvas | ai
   const [leftWidth, setLeftWidth] = useState(320)
@@ -167,19 +168,25 @@ export default function Levels({
     currentLevelData = null
   }
   
-  // Sync tilemap data with current level
+  // Sync tilemap data only when the selected level changes (not when level data is updated in-place)
   useEffect(() => {
-    if (currentLevelData?.tilemap) {
-      setTilemapData(currentLevelData.tilemap)
-    } else if (currentLevel) {
-      // Default empty tilemap when a level is selected but has no tilemap
+    if (!currentLevel) return
+    let levelData = null
+    try {
+      levelData = typeof currentLevel.level_data === 'string'
+        ? JSON.parse(currentLevel.level_data)
+        : currentLevel.level_data
+    } catch {}
+    if (levelData?.tilemap) {
+      setTilemapData(levelData.tilemap)
+    } else {
       setTilemapData({
         width: 50,
         height: 30,
         data: Array(30).fill(null).map(() => Array(50).fill(null))
       })
     }
-  }, [currentLevel, currentLevelData?.tilemap])
+  }, [currentLevel?.id])
   
   // Group entities by type for object hierarchy
   const entityGroups = useMemo(() => {
@@ -212,19 +219,28 @@ export default function Levels({
     return defaults[type.toLowerCase()] || { emoji: '📦', color: '#9ca3af' }
   }, [entityTypes])
   
-  // Tile change handler
+  // Tile change handler — updates local state; debounced save via useEffect below
   const handleTileChange = useCallback((x, y, tileId) => {
     setTilemapData(prev => {
       if (!prev) return prev
-      // Create a deep copy of the data array
       const newData = prev.data.map(row => [...row])
-      // Update the tile at (x, y)
       if (newData[y]) {
         newData[y][x] = tileId
       }
       return { ...prev, data: newData }
     })
   }, [])
+
+  // Debounced tilemap save: notify parent 500ms after last tile change
+  const tilemapSaveTimer = useRef(null)
+  useEffect(() => {
+    if (!tilemapData || !currentLevel || !onTilemapChange) return
+    clearTimeout(tilemapSaveTimer.current)
+    tilemapSaveTimer.current = setTimeout(() => {
+      onTilemapChange(tilemapData)
+    }, 500)
+    return () => clearTimeout(tilemapSaveTimer.current)
+  }, [tilemapData])
   
   // Shared pan/zoom handlers
   const handleSharedZoomChange = useCallback((newZoom) => {

@@ -1,0 +1,32 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug API Server",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/levelforge-api/main.py",
+      "python": "${workspaceFolder}/levelforge/venv/Scripts/python.exe",
+      "cwd": "${workspaceFolder}/levelforge-api",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}"
+      },
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      "name": "Debug UI (Chrome)",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:5173",
+      "webRoot": "${workspaceFolder}/levelforge-ui/src",
+      "preLaunchTask": "Start UI Dev Server"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Debug Full Stack",
+      "configurations": ["Debug API Server", "Debug UI (Chrome)"]
+    }
+  ]
+}

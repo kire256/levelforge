@@ -92,10 +92,28 @@ const ENTITY_COLORS = {
   unknown: '#9ca3af'
 }
 
-export default function LevelView({ level, mode = 'draft', onModeChange, entityTypes = [], onRename, selectedObject, onSelectObject, onUpdateObject, snapToGrid = false, showGrid = true, gridSize = 50, interactive = true, externalZoom, externalPan, onZoomChange, onPanChange }) {
+export default function LevelView({ level, mode = 'draft', onModeChange, entityTypes = [], onRename, selectedObject, onSelectObject, onUpdateObject, snapToGrid = false, showGrid = true, gridSize = 32, interactive = true, externalZoom, externalPan, onZoomChange, onPanChange }) {
   const canvasRef = useRef(null)
+  const canvasContainerRef = useRef(null)
+  const [canvasSize, setCanvasSize] = useState({ width: 1200, height: 800 })
   const [viewMode, setViewMode] = useState(mode) // draft, polish, playable
-  
+
+  // Resize canvas to match container (ResizeObserver catches toolbar show/hide too)
+  useEffect(() => {
+    const resizeCanvas = () => {
+      if (canvasContainerRef.current) {
+        const rect = canvasContainerRef.current.getBoundingClientRect()
+        if (rect.width > 0 && rect.height > 0) {
+          setCanvasSize({ width: Math.floor(rect.width), height: Math.floor(rect.height) })
+        }
+      }
+    }
+    resizeCanvas()
+    const observer = new ResizeObserver(resizeCanvas)
+    if (canvasContainerRef.current) observer.observe(canvasContainerRef.current)
+    return () => observer.disconnect()
+  }, [])
+
   // Use external pan/zoom if provided, otherwise use internal state
   const [internalZoom, setInternalZoom] = useState(1)
   const [internalPan, setInternalPan] = useState({ x: 0, y: 0 })
@@ -618,14 +636,17 @@ export default function LevelView({ level, mode = 'draft', onModeChange, entityT
       ctx.lineWidth = 1
       
       const scaledGridSize = gridSize * scale
-      for (let x = 0; x < canvas.width; x += scaledGridSize) {
+      const startX = ((offsetX % scaledGridSize) + scaledGridSize) % scaledGridSize
+      const startY = ((offsetY % scaledGridSize) + scaledGridSize) % scaledGridSize
+
+      for (let x = startX; x < canvas.width; x += scaledGridSize) {
         ctx.beginPath()
         ctx.moveTo(x, 0)
         ctx.lineTo(x, canvas.height)
         ctx.stroke()
       }
-      
-      for (let y = 0; y < canvas.height; y += scaledGridSize) {
+
+      for (let y = startY; y < canvas.height; y += scaledGridSize) {
         ctx.beginPath()
         ctx.moveTo(0, y)
         ctx.lineTo(canvas.width, y)
@@ -823,7 +844,7 @@ export default function LevelView({ level, mode = 'draft', onModeChange, entityT
   }
   
   return (
-    <div className={`level-view ${!interactive ? 'non-interactive' : ''}`}>
+    <div className={`level-view ${!interactive ? 'non-interactive' : ''}`} ref={canvasContainerRef}>
       {/* View Mode Tabs */}
       <div className="view-mode-bar">
         <div className="view-mode-tabs">
@@ -864,10 +885,10 @@ export default function LevelView({ level, mode = 'draft', onModeChange, entityT
       <div className="canvas-container">
         {viewMode === 'draft' && (
           <>
-            <canvas 
+            <canvas
               ref={canvasRef}
-              width={1200}
-              height={800}
+              width={canvasSize.width}
+              height={canvasSize.height}
               className={`level-canvas ${isPanning ? 'panning' : ''}`}
               onMouseDown={handleMouseDown}
               onMouseMove={(e) => {

@@ -1,0 +1,77 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Start API Server",
+      "type": "shell",
+      "command": "${workspaceFolder}/levelforge/venv/Scripts/python.exe",
+      "args": ["main.py"],
+      "options": {
+        "cwd": "${workspaceFolder}/levelforge-api",
+        "env": {
+          "PYTHONPATH": "${workspaceFolder}"
+        }
+      },
+      "group": "build",
+      "presentation": {
+        "label": "API Server",
+        "group": "levelforge",
+        "panel": "dedicated",
+        "reveal": "always"
+      },
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": {
+          "regexp": "^ERROR",
+          "message": 1
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": ".*",
+          "endsPattern": "Application startup complete"
+        }
+      }
+    },
+    {
+      "label": "Start UI Dev Server",
+      "type": "shell",
+      "command": "npx",
+      "args": ["--yes", "vite", "--host"],
+      "options": {
+        "cwd": "${workspaceFolder}/levelforge-ui"
+      },
+      "group": "build",
+      "presentation": {
+        "label": "UI Dev Server",
+        "group": "levelforge",
+        "panel": "dedicated",
+        "reveal": "always"
+      },
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": {
+          "regexp": "^ERROR",
+          "message": 1
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": ".*",
+          "endsPattern": "Local:.*localhost"
+        }
+      }
+    },
+    {
+      "label": "Start LevelForge (API + UI)",
+      "dependsOn": ["Start API Server", "Start UI Dev Server"],
+      "dependsOrder": "parallel",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "reveal": "always"
+      },
+      "problemMatcher": []
+    }
+  ]
+}

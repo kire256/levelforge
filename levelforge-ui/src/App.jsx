@@ -79,7 +79,7 @@ function App() {
   })
   const [gridSize, setGridSize] = useState(() => {
     const saved = localStorage.getItem('levelforge-grid-size')
-    return saved ? parseInt(saved, 10) : 50
+    return saved ? parseInt(saved, 10) : 32
   })
   
   // Persist grid settings
@@ -327,6 +327,7 @@ function App() {
         if (levelToSelect) {
           handleSetCurrentLevel(levelToSelect)
           setSelectedItem({ type: 'Level', ...levelToSelect })
+          setLevelViewMode('canvas')
         }
       } catch (e) {
         // Ignore parse errors
@@ -525,6 +526,37 @@ function App() {
       }))
     }
   }
+
+  const handleTilemapChange = useCallback(async (tilemapData) => {
+    if (!currentLevel) return
+
+    let levelData = null
+    try {
+      levelData = typeof currentLevel.level_data === 'string'
+        ? JSON.parse(currentLevel.level_data)
+        : { ...currentLevel.level_data }
+    } catch {
+      return
+    }
+    if (!levelData) return
+
+    levelData.tilemap = tilemapData
+    const updatedLevel = { ...currentLevel, level_data: JSON.stringify(levelData) }
+    setCurrentLevel(updatedLevel)
+    setLevelWithHistory(updatedLevel, false)
+    setLevels(prev => prev.map(l => l.id === updatedLevel.id ? updatedLevel : l))
+
+    try {
+      const res = await fetch(`${API_BASE}/api/levels/${currentLevel.id}?level_data=${encodeURIComponent(JSON.stringify(levelData))}`, {
+        method: 'PUT'
+      })
+      if (!res.ok) throw new Error('Failed to save tilemap')
+      logToConsole('Tilemap saved', 'info')
+    } catch (err) {
+      console.error('Tilemap save failed:', err)
+      logToConsole('Failed to save tilemap', 'error')
+    }
+  }, [currentLevel, setLevelWithHistory])
 
   const handleRenameLevel = async (level) => {
     const newName = prompt('Rename level:', level?.name || '')
@@ -979,21 +1011,21 @@ function App() {
           setShowGrid(prev => !prev)
           logToConsole(`Grid ${!showGrid ? 'shown' : 'hidden'}`, 'info')
           break
-        case 'grid-size-10':
-          setGridSize(10)
-          logToConsole('Grid size: 10px', 'info')
+        case 'grid-size-4':
+          setGridSize(4)
+          logToConsole('Grid size: 4px', 'info')
           break
-        case 'grid-size-25':
-          setGridSize(25)
-          logToConsole('Grid size: 25px', 'info')
+        case 'grid-size-8':
+          setGridSize(8)
+          logToConsole('Grid size: 8px', 'info')
           break
-        case 'grid-size-50':
-          setGridSize(50)
-          logToConsole('Grid size: 50px', 'info')
+        case 'grid-size-16':
+          setGridSize(16)
+          logToConsole('Grid size: 16px', 'info')
           break
-        case 'grid-size-100':
-          setGridSize(100)
-          logToConsole('Grid size: 100px', 'info')
+        case 'grid-size-32':
+          setGridSize(32)
+          logToConsole('Grid size: 32px', 'info')
           break
         case 'preferences':
           setActiveTab('settings')
@@ -1169,6 +1201,7 @@ Built with ❤️ by OpenClaw`)
             selectedObject={selectedObject}
             onSelectObject={setSelectedObject}
             onUpdateObject={handleUpdateObject}
+            onTilemapChange={handleTilemapChange}
             snapToGrid={snapToGrid}
             showGrid={showGrid}
             gridSize={gridSize}

@@ -5,7 +5,7 @@ import './Layout.css'
 
 // Menu configurations (generated dynamically)
 const createMenus = (recentProjects = [], gridSettings = {}) => {
-  const { snapToGrid = false, showGrid = true, gridSize = 50 } = gridSettings
+  const { snapToGrid = false, showGrid = true, gridSize = 32 } = gridSettings
   
   const recentItems = recentProjects.length > 0 
     ? [
@@ -63,10 +63,10 @@ const createMenus = (recentProjects = [], gridSettings = {}) => {
       { id: 'grid-options', label: 'Grid Options', submenu: [
         { id: 'toggle-grid', label: 'Show Grid', toggle: showGrid },
         { id: 'divider-g1', type: 'divider' },
-        { id: 'grid-size-10', label: 'Small (10px)', toggle: gridSize === 10 },
-        { id: 'grid-size-25', label: 'Medium (25px)', toggle: gridSize === 25 },
-        { id: 'grid-size-50', label: 'Large (50px)', toggle: gridSize === 50 },
-        { id: 'grid-size-100', label: 'Extra Large (100px)', toggle: gridSize === 100 },
+        { id: 'grid-size-4', label: 'Small (4px)', toggle: gridSize === 4 },
+        { id: 'grid-size-8', label: 'Medium (8px)', toggle: gridSize === 8 },
+        { id: 'grid-size-16', label: 'Large (16px)', toggle: gridSize === 16 },
+        { id: 'grid-size-32', label: 'Extra Large (32px)', toggle: gridSize === 32 },
       ]},
       { id: 'divider-3', type: 'divider' },
       { id: 'find', label: 'Find...', shortcut: 'Ctrl+F' },
