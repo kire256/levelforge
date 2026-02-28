@@ -576,7 +576,7 @@ export default function Levels({
                             selectedTileId={selectedTileId}
                             tool={selectedTool}
                             tileSize={currentProject?.tile_size || 32}
-                            showGrid={showGrid && activeLayer === LAYERS.TILEMAP}
+                            showGrid={showGrid}
                             onTileChange={handleTileChange}
                             interactive={activeLayer === LAYERS.TILEMAP}
                           />
@@ -603,15 +603,17 @@ export default function Levels({
                       )}
                     </div>
                     
-                    {/* Tile Palette (shown when tilemap layer is active) */}
+                    {/* Tile Palette - positioned as overlay in bottom-right */}
                     {activeLayer === LAYERS.TILEMAP && (
-                      <TilePalette
-                        tileTypes={tileTypes}
-                        selectedTileId={selectedTileId}
-                        onSelectTile={setSelectedTileId}
-                        selectedTool={selectedTool}
-                        onSelectTool={setSelectedTool}
-                      />
+                      <div className="tile-palette-overlay">
+                        <TilePalette
+                          tileTypes={tileTypes}
+                          selectedTileId={selectedTileId}
+                          onSelectTile={setSelectedTileId}
+                          selectedTool={selectedTool}
+                          onSelectTool={setSelectedTool}
+                        />
+                      </div>
                     )}
                   </>
                 ) : (

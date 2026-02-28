@@ -648,11 +648,31 @@
   display: flex;
   flex: 1;
   overflow: hidden;
+  position: relative;
 }
 
 .canvas-area .canvas-view {
   flex: 1;
   overflow: hidden;
+}
+
+/* Tile Palette Overlay - bottom right corner */
+.tile-palette-overlay {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  width: 200px;
+  max-height: calc(100% - 100px);
+  z-index: 100;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.tile-palette-overlay .tile-palette {
+  height: auto;
+  max-height: calc(100vh - 200px);
+  border-left: none;
 }
 
 /* Layered Canvas - both layers visible */

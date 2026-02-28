@@ -548,14 +548,8 @@ export default function LevelView({ level, mode = 'draft', onModeChange, entityT
     
     const ctx = canvas.getContext('2d')
     
-    // Clear canvas - use transparent background when non-interactive (to show tilemap underneath)
-    if (interactive) {
-      ctx.fillStyle = '#f8f9fa'
-    } else {
-      ctx.clearRect(0, 0, canvas.width, canvas.height)
-      ctx.fillStyle = 'transparent'
-    }
-    ctx.fillRect(0, 0, canvas.width, canvas.height)
+    // Always clear with transparent - tilemap layer provides background
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
     
     // Collect all coordinates to determine bounds
     const allPoints = []
@@ -789,7 +783,7 @@ export default function LevelView({ level, mode = 'draft', onModeChange, entityT
       ctx.fillStyle = '#6b7280'
       ctx.fillText('GOAL', x, y + 16 * scale)
     }
-  }, [levelData, zoom, pan, customEntityLookup, selectedObject, hoveredObject, getEntitySymbol, getEntityColor, showGrid, gridSize, interactive])
+  }, [levelData, zoom, pan, customEntityLookup, selectedObject, hoveredObject, getEntitySymbol, getEntityColor, showGrid, gridSize])
   
   // Trigger render when dependencies change
   useEffect(() => {

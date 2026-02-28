@@ -244,7 +244,7 @@ export default function TilemapCanvas({
     const canvasW = canvasSize.width
     const canvasH = canvasSize.height
     
-    // Clear canvas
+    // Clear canvas with dark background (this is the base layer)
     ctx.fillStyle = '#1a1a2e'
     ctx.fillRect(0, 0, canvasW, canvasH)
     
@@ -276,9 +276,9 @@ export default function TilemapCanvas({
       }
     }
     
-    // Draw grid
+    // Draw grid (always show when visible)
     if (showGrid && scaledTileSize >= 8) {
-      ctx.strokeStyle = 'rgba(255,255,255,0.15)'
+      ctx.strokeStyle = 'rgba(255,255,255,0.2)'
       ctx.lineWidth = 1
       
       for (let x = startTileX; x <= endTileX; x++) {
