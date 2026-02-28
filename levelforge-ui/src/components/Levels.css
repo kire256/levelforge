@@ -671,27 +671,13 @@
 
 .tile-palette-overlay.dragging {
   opacity: 0.9;
+  cursor: grabbing;
 }
 
 .tile-palette-overlay .tile-palette {
   height: auto;
   max-height: calc(100vh - 200px);
   border-left: none;
-}
-
-.tile-palette-overlay .tile-palette .palette-section:first-child .section-header {
-  cursor: grab;
-}
-
-.tile-palette-overlay .tile-palette .palette-section:first-child .section-header:active {
-  cursor: grabbing;
-}
-
-.tile-palette-overlay .tile-palette .palette-section:first-child .section-header::before {
-  content: '⋮⋮';
-  margin-right: 8px;
-  opacity: 0.5;
-  font-size: 10px;
 }
 
 /* Layered Canvas - both layers visible */
