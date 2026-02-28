@@ -89,10 +89,12 @@
 .action-btn.primary {
   background: var(--accent);
   border-color: var(--accent);
+  color: white !important;
 }
 
 .action-btn.primary:hover {
   background: var(--accent-hover);
+  color: white !important;
 }
 
 .action-icon {
