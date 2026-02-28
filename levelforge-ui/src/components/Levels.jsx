@@ -80,6 +80,63 @@ export default function Levels({
   const [selectedTool, setSelectedTool] = useState(TOOLS.PENCIL)
   const [tilemapData, setTilemapData] = useState(null)
   
+  // Draggable palette state
+  const [palettePosition, setPalettePosition] = useState({ x: 16, y: null }) // null = bottom
+  const [isDraggingPalette, setIsDraggingPalette] = useState(false)
+  const [paletteDragStart, setPaletteDragStart] = useState({ x: 0, y: 0 })
+  
+  // Palette drag handlers
+  const handlePaletteMouseDown = useCallback((e) => {
+    // Only start drag if clicking on the header
+    const header = e.target.closest('.tile-palette-header')
+    if (header) {
+      e.preventDefault()
+      setIsDraggingPalette(true)
+      const overlay = e.currentTarget
+      const rect = overlay.getBoundingClientRect()
+      setPaletteDragStart({
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top
+      })
+    }
+  }, [])
+  
+  useEffect(() => {
+    if (!isDraggingPalette) return
+    
+    const handleMouseMove = (e) => {
+      const container = document.querySelector('.canvas-area')
+      if (!container) return
+      
+      const containerRect = container.getBoundingClientRect()
+      const paletteWidth = 200 // known width
+      
+      const newX = e.clientX - containerRect.left - paletteDragStart.x
+      const newY = e.clientY - containerRect.top - paletteDragStart.y
+      
+      // Constrain to container bounds
+      const maxX = containerRect.width - paletteWidth - 8
+      const maxY = containerRect.height - 200 // approximate min height
+      
+      setPalettePosition({ 
+        x: Math.max(8, Math.min(maxX, newX)), 
+        y: Math.max(8, Math.min(maxY, newY))
+      })
+    }
+    
+    const handleMouseUp = () => {
+      setIsDraggingPalette(false)
+    }
+    
+    window.addEventListener('mousemove', handleMouseMove)
+    window.addEventListener('mouseup', handleMouseUp)
+    
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [isDraggingPalette, paletteDragStart])
+  
   // Load entity types when project changes
   const [entityTypes, setEntityTypes] = useState([])
   
@@ -605,7 +662,15 @@ export default function Levels({
                     
                     {/* Tile Palette - positioned as overlay in bottom-right */}
                     {activeLayer === LAYERS.TILEMAP && (
-                      <div className="tile-palette-overlay">
+                      <div 
+                        className={`tile-palette-overlay ${isDraggingPalette ? 'dragging' : ''}`}
+                        style={
+                          palettePosition.y === null 
+                            ? { right: 16, bottom: 16 }
+                            : { left: palettePosition.x, top: palettePosition.y, right: 'auto', bottom: 'auto' }
+                        }
+                        onMouseDown={handlePaletteMouseDown}
+                      >
                         <TilePalette
                           tileTypes={tileTypes}
                           selectedTileId={selectedTileId}

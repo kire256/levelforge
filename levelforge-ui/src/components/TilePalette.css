@@ -7,6 +7,34 @@
   overflow-y: auto;
 }
 
+/* Drag Header */
+.tile-palette-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--bg-tertiary);
+  cursor: grab;
+  border-bottom: 1px solid var(--border-color);
+  user-select: none;
+}
+
+.tile-palette-header:active {
+  cursor: grabbing;
+}
+
+.drag-handle {
+  color: var(--text-secondary);
+  font-size: 12px;
+  letter-spacing: -2px;
+}
+
+.palette-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
 .palette-section {
   border-bottom: 1px solid var(--border-color);
 }

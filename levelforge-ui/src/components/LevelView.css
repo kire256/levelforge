@@ -23,7 +23,8 @@
 .level-view.non-interactive .level-toolbar,
 .level-view.non-interactive .view-mode-bar,
 .level-view.non-interactive .level-info-panel,
-.level-view.non-interactive .legend-panel {
+.level-view.non-interactive .legend-panel,
+.level-view.non-interactive .level-canvas-wrapper .legend-panel {
   display: none;
 }
 

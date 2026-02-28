@@ -18,12 +18,19 @@ export default function TilePalette({
   onSelectTool,
 }) {
   const [showTools, setShowTools] = useState(true)
+  const [showTiles, setShowTiles] = useState(true)
   
   // Find the selected tile type
   const selectedTile = tileTypes.find(t => t.id === selectedTileId)
   
   return (
     <div className="tile-palette">
+      {/* Drag Header */}
+      <div className="tile-palette-header">
+        <span className="drag-handle">⋮⋮</span>
+        <span className="palette-title">Tile Tools</span>
+      </div>
+      
       {/* Tools Section */}
       <div className="palette-section">
         <div 
