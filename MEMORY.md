@@ -80,6 +80,16 @@ Just open http://192.168.68.72:4173 in any browser.
 - ✅ Level persistence after generation
 - ✅ AI prompts use project's custom entity types
 
+### Tilemap System (2026-02-28)
+- ✅ Phase 1: Database schema (tile_types table, tile_size per project)
+- ✅ Phase 1: API endpoints for tile types CRUD
+- ✅ Phase 1: TileTypeManager UI in Settings
+- ✅ Phase 2: TilemapCanvas with grid rendering, zoom/pan
+- ✅ Phase 2: Drawing tools (Pencil, Eraser, Rectangle, Flood Fill)
+- ✅ Phase 2: Layer visibility (Entities + Tilemap)
+- ✅ Phase 2: Tile tools toolbar (appears when tilemap active)
+- Design doc: `docs/TILEMAP_DESIGN.md`
+
 ### Enterprise UX (2026-02-24)
 - ✅ Complete UI redesign (Unity/VS Code style)
 - ✅ Top menu bar with dropdowns (File, Edit, View, Entities, Levels, AI, Tools, Help)
