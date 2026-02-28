@@ -510,6 +510,64 @@
   }
 }
 
+/* Level Inspector Styles */
+.level-inspector {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.level-inspector-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.level-inspector .level-icon {
+  font-size: 1.5rem;
+}
+
+.level-inspector .level-title {
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.level-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.level-section h4 {
+  margin: 0;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+}
+
+.level-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.level-field label {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+
+.level-value {
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  font-family: monospace;
+}
+
 @media (max-width: 900px) {
   .draft-legend,
   .level-info-panel {

@@ -655,94 +655,74 @@ function App() {
             />
           </div>
         </div>
-        
-        {type === 'platform' && (
-          <div className="object-section">
-            <h4>Size</h4>
-            <div className="object-field">
-              <label>Width</label>
-              <input 
-                type="number" 
-                value={data.width ?? 100} 
-                onChange={(e) => handleNumberChange('width', e.target.value)}
-                onBlur={handleFieldBlur}
-                onKeyDown={handleFieldKeyDown}
-              />
-            </div>
-            <div className="object-field">
-              <label>Height</label>
-              <input 
-                type="number" 
-                value={data.height ?? 30} 
-                onChange={(e) => handleNumberChange('height', e.target.value)}
-                onBlur={handleFieldBlur}
-                onKeyDown={handleFieldKeyDown}
-              />
-            </div>
-          </div>
-        )}
-        
-        {type === 'entity' && (
-          <div className="object-section">
-            <h4>Entity Properties</h4>
-            <div className="object-field">
-              <label>Name</label>
-              <input 
-                type="text" 
-                value={data.name ?? ''} 
-                onChange={(e) => handleFieldChange('name', e.target.value)}
-                onBlur={handleFieldBlur}
-                onKeyDown={handleFieldKeyDown}
-                placeholder="Optional name"
-              />
-            </div>
-            <div className="object-field">
-              <label>Type</label>
-              <input 
-                type="text" 
-                value={obj.entityType ?? data.type ?? ''} 
-                disabled
-                className="disabled"
-              />
-            </div>
-          </div>
-        )}
-        
-        {/* Show any additional metadata */}
-        {Object.entries(data).map(([key, value]) => {
-          if (['x', 'y', 'width', 'height', 'type', 'name'].includes(key)) return null
-          if (typeof value === 'object') {
-            return (
-              <div key={key} className="object-section">
-                <h4>{key}</h4>
-                <pre className="object-metadata">{JSON.stringify(value, null, 2)}</pre>
-              </div>
-            )
-          }
-          return null
-        })}
-        
-        {/* Level actions */}
-        <div className="object-section">
-          <h4>Level Actions</h4>
-          <div className="object-actions">
-            <button 
-              className="btn-small btn-danger" 
-              onClick={() => {
-                if (confirm(`Delete level "${currentLevel?.name}"? This cannot be undone.`)) {
-                  handleDeleteLevel(currentLevel)
-                  setSelectedObject(null)
-                }
-              }}
-            >
-              🗑 Delete Level
-            </button>
-          </div>
-        </div>
       </div>
     )
-  }, [entityTypes, handleUpdateObject, currentLevel, handleDeleteLevel, selectedObject])
+  }, [entityTypes, handleUpdateObject])
   
+  // Render level inspector content (when level selected but no object)
+  const renderLevelInspector = useCallback(() => {
+    if (!currentLevel) return null
+    
+    // Parse level data for stats
+    let levelData = null
+    try {
+      levelData = typeof currentLevel.level_data === 'string'
+        ? JSON.parse(currentLevel.level_data)
+        : currentLevel.level_data
+    } catch {
+      // Ignore parse errors
+    }
+    
+    return (
+      <div className="level-inspector">
+        <div className="level-inspector-header">
+          <span className="level-icon">🗺️</span>
+          <span className="level-title">{currentLevel.name}</span>
+        </div>
+        
+        <div className="level-section">
+          <h4>Properties</h4>
+          <div className="level-field">
+            <label>Genre</label>
+            <span className="level-value">{currentLevel.genre || 'platformer'}</span>
+          </div>
+          <div className="level-field">
+            <label>Difficulty</label>
+            <span className="level-value">{currentLevel.difficulty || 'medium'}</span>
+          </div>
+        </div>
+        
+        {levelData && (
+          <div className="level-section">
+            <h4>Contents</h4>
+            <div className="level-field">
+              <label>Entities</label>
+              <span className="level-value">{levelData.entities?.length || 0}</span>
+            </div>
+            <div className="level-field">
+              <label>Platforms</label>
+              <span className="level-value">{levelData.platforms?.length || 0}</span>
+            </div>
+            {levelData.tilemap && (
+              <div className="level-field">
+                <label>Tilemap</label>
+                <span className="level-value">{levelData.tilemap.width}x{levelData.tilemap.height}</span>
+              </div>
+            )}
+            <div className="level-field">
+              <label>Player Spawn</label>
+              <span className="level-value">{levelData.player_spawn ? `(${levelData.player_spawn.x}, ${levelData.player_spawn.y})` : 'Not set'}</span>
+            </div>
+            <div className="level-field">
+              <label>Goal</label>
+              <span className="level-value">{levelData.goal ? `(${levelData.goal.x}, ${levelData.goal.y})` : 'Not set'}</span>
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }, [currentLevel])
+
   const handleSelectEntity = (entity) => {
     setSelectedItem({ type: 'Entity', ...entity })
     setInspectorContent(null) // Clear any edit form
@@ -1238,6 +1218,7 @@ Built with ❤️ by OpenClaw`)
       inspectorContent={
         editingEntity ? renderEntityEditForm() : 
         (activeTab === 'levels' && selectedObject) ? renderObjectInspector(selectedObject) : 
+        (activeTab === 'levels' && currentLevel && !selectedObject) ? renderLevelInspector() :
         inspectorContent
       }
       consoleLogs={consoleLogs}

@@ -2,7 +2,6 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import LevelView from './LevelView'
 import EntityRequirements from './EntityRequirements'
 import TilemapCanvas, { TOOLS } from './TilemapCanvas'
-import TilePalette from './TilePalette'
 import './Levels.css'
 
 const GENRES = [
@@ -79,63 +78,6 @@ export default function Levels({
   const [selectedTileId, setSelectedTileId] = useState(null)
   const [selectedTool, setSelectedTool] = useState(TOOLS.PENCIL)
   const [tilemapData, setTilemapData] = useState(null)
-  
-  // Draggable palette state
-  const [palettePosition, setPalettePosition] = useState({ x: 16, y: null }) // null = bottom
-  const [isDraggingPalette, setIsDraggingPalette] = useState(false)
-  const [paletteDragStart, setPaletteDragStart] = useState({ x: 0, y: 0 })
-  
-  // Palette drag handlers
-  const handlePaletteMouseDown = useCallback((e) => {
-    // Only start drag if clicking on the header
-    const header = e.target.closest('.tile-palette-header')
-    if (header) {
-      e.preventDefault()
-      setIsDraggingPalette(true)
-      const overlay = e.currentTarget
-      const rect = overlay.getBoundingClientRect()
-      setPaletteDragStart({
-        x: e.clientX - rect.left,
-        y: e.clientY - rect.top
-      })
-    }
-  }, [])
-  
-  useEffect(() => {
-    if (!isDraggingPalette) return
-    
-    const handleMouseMove = (e) => {
-      const container = document.querySelector('.canvas-area')
-      if (!container) return
-      
-      const containerRect = container.getBoundingClientRect()
-      const paletteWidth = 200 // known width
-      
-      const newX = e.clientX - containerRect.left - paletteDragStart.x
-      const newY = e.clientY - containerRect.top - paletteDragStart.y
-      
-      // Constrain to container bounds
-      const maxX = containerRect.width - paletteWidth - 8
-      const maxY = containerRect.height - 200 // approximate min height
-      
-      setPalettePosition({ 
-        x: Math.max(8, Math.min(maxX, newX)), 
-        y: Math.max(8, Math.min(maxY, newY))
-      })
-    }
-    
-    const handleMouseUp = () => {
-      setIsDraggingPalette(false)
-    }
-    
-    window.addEventListener('mousemove', handleMouseMove)
-    window.addEventListener('mouseup', handleMouseUp)
-    
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove)
-      window.removeEventListener('mouseup', handleMouseUp)
-    }
-  }, [isDraggingPalette, paletteDragStart])
   
   // Load entity types when project changes
   const [entityTypes, setEntityTypes] = useState([])
@@ -608,6 +550,79 @@ export default function Levels({
               <div className="canvas-area">
                 {currentLevel ? (
                   <>
+                    {/* Tile Tools Toolbar - appears when tilemap layer is active */}
+                    {activeLayer === LAYERS.TILEMAP && (
+                      <div className="tile-tools-toolbar">
+                        <div className="toolbar-section tools-section">
+                          <span className="toolbar-label">Tools:</span>
+                          <button
+                            className={`tool-btn ${selectedTool === TOOLS.PENCIL ? 'active' : ''}`}
+                            onClick={() => setSelectedTool(TOOLS.PENCIL)}
+                            title="Pencil (B)"
+                          >
+                            ✏️
+                          </button>
+                          <button
+                            className={`tool-btn ${selectedTool === TOOLS.ERASER ? 'active' : ''}`}
+                            onClick={() => setSelectedTool(TOOLS.ERASER)}
+                            title="Eraser (E)"
+                          >
+                            🧹
+                          </button>
+                          <button
+                            className={`tool-btn ${selectedTool === TOOLS.RECT ? 'active' : ''}`}
+                            onClick={() => setSelectedTool(TOOLS.RECT)}
+                            title="Rectangle (R)"
+                          >
+                            ▢
+                          </button>
+                          <button
+                            className={`tool-btn ${selectedTool === TOOLS.FILL ? 'active' : ''}`}
+                            onClick={() => setSelectedTool(TOOLS.FILL)}
+                            title="Fill (G)"
+                          >
+                            🪣
+                          </button>
+                        </div>
+                        
+                        <div className="toolbar-divider" />
+                        
+                        <div className="toolbar-section tiles-section">
+                          <span className="toolbar-label">Tiles:</span>
+                          <button
+                            className={`tile-swatch-btn ${selectedTileId === null ? 'selected' : ''}`}
+                            onClick={() => setSelectedTileId(null)}
+                            title="Eraser (Empty)"
+                          >
+                            🚫
+                          </button>
+                          {tileTypes.map(tile => (
+                            <button
+                              key={tile.id}
+                              className={`tile-swatch-btn ${selectedTileId === tile.id ? 'selected' : ''}`}
+                              style={{ backgroundColor: tile.color }}
+                              onClick={() => setSelectedTileId(tile.id)}
+                              title={`${tile.name}\n${tile.collision_type} • ${tile.category}`}
+                            />
+                          ))}
+                        </div>
+                        
+                        {selectedTileId !== null && tileTypes.find(t => t.id === selectedTileId) && (
+                          <>
+                            <div className="toolbar-divider" />
+                            <div className="toolbar-section info-section">
+                              <span className="selected-tile-name">
+                                {tileTypes.find(t => t.id === selectedTileId)?.name}
+                              </span>
+                              <span className="selected-tile-type">
+                                {tileTypes.find(t => t.id === selectedTileId)?.collision_type}
+                              </span>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )}
+                    
                     {/* Main Canvas - Both layers render simultaneously */}
                     <div className="canvas-view layered-canvas">
                       {/* Tilemap Layer (renders first, underneath) */}
@@ -645,27 +660,6 @@ export default function Levels({
                         </div>
                       )}
                     </div>
-                    
-                    {/* Tile Palette - positioned as overlay in bottom-right */}
-                    {activeLayer === LAYERS.TILEMAP && (
-                      <div 
-                        className={`tile-palette-overlay ${isDraggingPalette ? 'dragging' : ''}`}
-                        style={
-                          palettePosition.y === null 
-                            ? { right: 16, bottom: 16 }
-                            : { left: palettePosition.x, top: palettePosition.y, right: 'auto', bottom: 'auto' }
-                        }
-                        onMouseDown={handlePaletteMouseDown}
-                      >
-                        <TilePalette
-                          tileTypes={tileTypes}
-                          selectedTileId={selectedTileId}
-                          onSelectTile={setSelectedTileId}
-                          selectedTool={selectedTool}
-                          onSelectTool={setSelectedTool}
-                        />
-                      </div>
-                    )}
                   </>
                 ) : (
                   <div className="no-selection">
