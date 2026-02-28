@@ -3,7 +3,9 @@ import UndoRedoControls from './UndoRedoControls'
 import './Layout.css'
 
 // Menu configurations (generated dynamically)
-const createMenus = (recentProjects = []) => {
+const createMenus = (recentProjects = [], gridSettings = {}) => {
+  const { snapToGrid = false, showGrid = true, gridSize = 50 } = gridSettings
+  
   const recentItems = recentProjects.length > 0 
     ? [
         ...recentProjects.map((p, i) => ({ id: `recent-${p.id}`, label: p.name })),
@@ -56,9 +58,19 @@ const createMenus = (recentProjects = []) => {
       { id: 'duplicate', label: 'Duplicate', shortcut: 'Ctrl+D' },
       { id: 'delete', label: 'Delete', shortcut: 'Del' },
       { id: 'divider-2', type: 'divider' },
+      { id: 'snap-to-grid', label: 'Snap to Grid', toggle: snapToGrid },
+      { id: 'grid-options', label: 'Grid Options', submenu: [
+        { id: 'toggle-grid', label: 'Show Grid', toggle: showGrid },
+        { id: 'divider-g1', type: 'divider' },
+        { id: 'grid-size-10', label: 'Small (10px)', toggle: gridSize === 10 },
+        { id: 'grid-size-25', label: 'Medium (25px)', toggle: gridSize === 25 },
+        { id: 'grid-size-50', label: 'Large (50px)', toggle: gridSize === 50 },
+        { id: 'grid-size-100', label: 'Extra Large (100px)', toggle: gridSize === 100 },
+      ]},
+      { id: 'divider-3', type: 'divider' },
       { id: 'find', label: 'Find...', shortcut: 'Ctrl+F' },
       { id: 'replace', label: 'Replace...', shortcut: 'Ctrl+H' },
-      { id: 'divider-3', type: 'divider' },
+      { id: 'divider-4', type: 'divider' },
       { id: 'preferences', label: 'Preferences...' },
     ]
   },
@@ -199,6 +211,12 @@ export default function Layout({
   onRedo,
   historyInfo = null,
   currentProject,
+  showAboutModal,
+  onCloseAboutModal,
+  // Grid settings
+  snapToGrid = false,
+  showGrid = true,
+  gridSize = 50,
 }) {
   const [showInspector, setShowInspector] = useState(externalShowInspector ?? true)
   const [showConsole, setShowConsole] = useState(externalShowConsole ?? false)
@@ -446,7 +464,7 @@ export default function Layout({
         <div className="menu-left">
           <span className="logo">🎮 LevelForge</span>
           <nav className="menu-bar" ref={menuRef}>
-            {Object.entries(createMenus(recentProjects)).map(([menuId, menu]) => (
+            {Object.entries(createMenus(recentProjects, { snapToGrid, showGrid, gridSize })).map(([menuId, menu]) => (
               <div key={menuId} className="menu-container">
                 <button 
                   className={`menu-btn ${activeMenu === menuId ? 'active' : ''}`}

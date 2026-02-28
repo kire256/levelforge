@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { BUILD_VERSION, BUILD_COMMIT, BUILD_TIME } from '../version'
 import './Dashboard.css'
 
 export default function Dashboard({ 

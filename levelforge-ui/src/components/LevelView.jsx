@@ -92,7 +92,7 @@ const ENTITY_COLORS = {
   unknown: '#9ca3af'
 }
 
-export default function LevelView({ level, mode = 'draft', onModeChange, entityTypes = [], onRename, selectedObject, onSelectObject, onUpdateObject }) {
+export default function LevelView({ level, mode = 'draft', onModeChange, entityTypes = [], onRename, selectedObject, onSelectObject, onUpdateObject, snapToGrid = false, showGrid = true, gridSize = 50 }) {
   const canvasRef = useRef(null)
   const [viewMode, setViewMode] = useState(mode) // draft, polish, playable
   const [zoom, setZoom] = useState(1)
@@ -379,9 +379,19 @@ export default function LevelView({ level, mode = 'draft', onModeChange, entityT
       const worldDeltaX = deltaX / scale
       const worldDeltaY = -deltaY / scale
       
-      // Update the object position (round to integers)
-      const newX = Math.round(dragStartWorld.x + worldDeltaX)
-      const newY = Math.round(dragStartWorld.y + worldDeltaY)
+      // Calculate new position
+      let newX = dragStartWorld.x + worldDeltaX
+      let newY = dragStartWorld.y + worldDeltaY
+      
+      // Snap to grid if enabled
+      if (snapToGrid) {
+        newX = Math.round(newX / gridSize) * gridSize
+        newY = Math.round(newY / gridSize) * gridSize
+      } else {
+        // Round to integers
+        newX = Math.round(newX)
+        newY = Math.round(newY)
+      }
       
       const updatedData = { ...draggingObject.data, x: newX, y: newY }
       const updatedObj = { ...draggingObject, data: updatedData }
@@ -396,7 +406,7 @@ export default function LevelView({ level, mode = 'draft', onModeChange, entityT
         y: e.clientY - panStart.y
       })
     }
-  }, [isDraggingEntity, draggingObject, dragStartWorld, isPanning, panStart, zoom, levelData, onSelectObject])
+  }, [isDraggingEntity, draggingObject, dragStartWorld, isPanning, panStart, zoom, levelData, onSelectObject, snapToGrid, gridSize])
   
   const handleMouseUp = useCallback(() => {
     // If we were dragging an entity, persist the change
@@ -595,23 +605,25 @@ export default function LevelView({ level, mode = 'draft', onModeChange, entityT
     const offsetX = canvas.width / 2 - (minX + levelWidth / 2) * scale + pan.x
     const offsetY = canvas.height / 2 + (minY + levelHeight / 2) * scale + pan.y
     
-    // Draw grid
-    ctx.strokeStyle = '#e5e7eb'
-    ctx.lineWidth = 1
-    
-    const gridSize = 50 * scale
-    for (let x = 0; x < canvas.width; x += gridSize) {
-      ctx.beginPath()
-      ctx.moveTo(x, 0)
-      ctx.lineTo(x, canvas.height)
-      ctx.stroke()
-    }
-    
-    for (let y = 0; y < canvas.height; y += gridSize) {
-      ctx.beginPath()
-      ctx.moveTo(0, y)
-      ctx.lineTo(canvas.width, y)
-      ctx.stroke()
+    // Draw grid (conditional)
+    if (showGrid) {
+      ctx.strokeStyle = '#e5e7eb'
+      ctx.lineWidth = 1
+      
+      const scaledGridSize = gridSize * scale
+      for (let x = 0; x < canvas.width; x += scaledGridSize) {
+        ctx.beginPath()
+        ctx.moveTo(x, 0)
+        ctx.lineTo(x, canvas.height)
+        ctx.stroke()
+      }
+      
+      for (let y = 0; y < canvas.height; y += scaledGridSize) {
+        ctx.beginPath()
+        ctx.moveTo(0, y)
+        ctx.lineTo(canvas.width, y)
+        ctx.stroke()
+      }
     }
     
     // Draw platforms
@@ -772,7 +784,7 @@ export default function LevelView({ level, mode = 'draft', onModeChange, entityT
       ctx.fillStyle = '#6b7280'
       ctx.fillText('GOAL', x, y + 16 * scale)
     }
-  }, [levelData, zoom, pan, customEntityLookup, selectedObject, hoveredObject, getEntitySymbol, getEntityColor])
+  }, [levelData, zoom, pan, customEntityLookup, selectedObject, hoveredObject, getEntitySymbol, getEntityColor, showGrid, gridSize])
   
   // Trigger render when dependencies change
   useEffect(() => {

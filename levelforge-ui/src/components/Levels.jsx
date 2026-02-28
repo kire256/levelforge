@@ -35,7 +35,11 @@ export default function Levels({
   onRenameLevel,
   selectedObject,
   onSelectObject,
-  onUpdateObject
+  onUpdateObject,
+  // Grid settings
+  snapToGrid = false,
+  showGrid = true,
+  gridSize = 50,
 }) {
   const [viewMode, setViewMode] = useState(externalViewMode ?? 'canvas') // canvas | ai
   const [leftWidth, setLeftWidth] = useState(320)
@@ -428,6 +432,9 @@ export default function Levels({
                     selectedObject={activeSelectedObject}
                     onSelectObject={handleSelectObject}
                     onUpdateObject={onUpdateObject}
+                    snapToGrid={snapToGrid}
+                    showGrid={showGrid}
+                    gridSize={gridSize}
                   />
                 ) : (
                   <div className="no-selection">

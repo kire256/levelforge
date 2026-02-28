@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import Layout from './components/Layout'
 import Dashboard from './components/Dashboard'
 import Entities from './components/Entities'
@@ -38,6 +38,7 @@ function App() {
   const [currentProject, setCurrentProject] = useState(null)
   const [levels, setLevels] = useState([])
   const [showProjectModal, setShowProjectModal] = useState(false)
+  const [showAboutModal, setShowAboutModal] = useState(false)
   const [levelViewMode, setLevelViewMode] = useState('ai') // 'list', 'canvas', or 'ai'
   const [recentProjects, setRecentProjects] = useState(() => {
     const saved = localStorage.getItem('levelforge-recent-projects')
@@ -66,6 +67,31 @@ function App() {
   // Model state
   const [availableModels, setAvailableModels] = useState({})
   const [selectedModel, setSelectedModel] = useState('')
+  
+  // Grid settings state
+  const [snapToGrid, setSnapToGrid] = useState(() => {
+    const saved = localStorage.getItem('levelforge-snap-to-grid')
+    return saved === 'true'
+  })
+  const [showGrid, setShowGrid] = useState(() => {
+    const saved = localStorage.getItem('levelforge-show-grid')
+    return saved !== 'false' // default true
+  })
+  const [gridSize, setGridSize] = useState(() => {
+    const saved = localStorage.getItem('levelforge-grid-size')
+    return saved ? parseInt(saved, 10) : 50
+  })
+  
+  // Persist grid settings
+  useEffect(() => {
+    localStorage.setItem('levelforge-snap-to-grid', String(snapToGrid))
+  }, [snapToGrid])
+  useEffect(() => {
+    localStorage.setItem('levelforge-show-grid', String(showGrid))
+  }, [showGrid])
+  useEffect(() => {
+    localStorage.setItem('levelforge-grid-size', String(gridSize))
+  }, [gridSize])
   
   // Undo/Redo state - track current level with history
   const {
@@ -124,12 +150,13 @@ function App() {
   const handleUpdateObject = useCallback(async (updatedObj) => {
     if (!updatedObj || !currentLevel) return
     
-    // Parse current level data
+    // Parse current level data from displayLevel (which includes undo/redo state)
+    const sourceLevel = displayLevel || currentLevel
     let levelData = null
     try {
-      levelData = typeof currentLevel.level_data === 'string'
-        ? JSON.parse(currentLevel.level_data)
-        : currentLevel.level_data
+      levelData = typeof sourceLevel.level_data === 'string'
+        ? JSON.parse(sourceLevel.level_data)
+        : sourceLevel.level_data
     } catch {
       return
     }
@@ -149,9 +176,10 @@ function App() {
       levelData.goal = { ...levelData.goal, ...data }
     }
     
-    // Update local state immediately for responsiveness
-    const updatedLevel = { ...currentLevel, level_data: JSON.stringify(levelData) }
+    // Update both currentLevel and history for undo/redo support
+    const updatedLevel = { ...sourceLevel, level_data: JSON.stringify(levelData) }
     setCurrentLevel(updatedLevel)
+    setLevelWithHistory(updatedLevel, false) // false = not a new history entry, just sync
     
     // Also update the levels array
     setLevels(prev => prev.map(l => l.id === updatedLevel.id ? updatedLevel : l))
@@ -168,7 +196,7 @@ function App() {
       console.error('Update object failed:', err)
       logToConsole('Failed to update object', 'error')
     }
-  }, [currentLevel, logToConsole])
+  }, [currentLevel, displayLevel, setLevelWithHistory, logToConsole])
   
   // Load projects and models on mount
   useEffect(() => {
@@ -513,6 +541,12 @@ function App() {
     }
   }
   
+  // Track latest selectedObject to avoid stale closures in inspector
+  const selectedObjectRef = useRef(selectedObject)
+  useEffect(() => {
+    selectedObjectRef.current = selectedObject
+  }, [selectedObject])
+  
   // Render object inspector content
   const renderObjectInspector = useCallback((obj) => {
     if (!obj || !obj.data) return null
@@ -533,10 +567,11 @@ function App() {
       }
     }
     
-    // Save to API on blur or enter
+    // Save to API on blur or enter - use ref to get latest value
     const handleFieldBlur = () => {
-      if (selectedObject) {
-        handleUpdateObject(selectedObject)
+      const currentObj = selectedObjectRef.current
+      if (currentObj) {
+        handleUpdateObject(currentObj)
       }
     }
     
@@ -928,6 +963,30 @@ function App() {
     // Edit menu
     if (menu === 'edit') {
       switch (action) {
+        case 'snap-to-grid':
+          setSnapToGrid(prev => !prev)
+          logToConsole(`Snap to Grid ${!snapToGrid ? 'enabled' : 'disabled'}`, 'info')
+          break
+        case 'toggle-grid':
+          setShowGrid(prev => !prev)
+          logToConsole(`Grid ${!showGrid ? 'shown' : 'hidden'}`, 'info')
+          break
+        case 'grid-size-10':
+          setGridSize(10)
+          logToConsole('Grid size: 10px', 'info')
+          break
+        case 'grid-size-25':
+          setGridSize(25)
+          logToConsole('Grid size: 25px', 'info')
+          break
+        case 'grid-size-50':
+          setGridSize(50)
+          logToConsole('Grid size: 50px', 'info')
+          break
+        case 'grid-size-100':
+          setGridSize(100)
+          logToConsole('Grid size: 100px', 'info')
+          break
         case 'preferences':
           setActiveTab('settings')
           break
@@ -1102,6 +1161,9 @@ Built with ❤️ by OpenClaw`)
             selectedObject={selectedObject}
             onSelectObject={setSelectedObject}
             onUpdateObject={handleUpdateObject}
+            snapToGrid={snapToGrid}
+            showGrid={showGrid}
+            gridSize={gridSize}
           />
         )
       case 'library':
@@ -1168,6 +1230,12 @@ Built with ❤️ by OpenClaw`)
       onRedo={redoLevel}
       historyInfo={getHistoryInfo()}
       currentProject={currentProject}
+      showAboutModal={showAboutModal}
+      onCloseAboutModal={() => setShowAboutModal(false)}
+      // Grid settings
+      snapToGrid={snapToGrid}
+      showGrid={showGrid}
+      gridSize={gridSize}
     >
       {renderContent()}
     </Layout>
