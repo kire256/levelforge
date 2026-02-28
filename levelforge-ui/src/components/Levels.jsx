@@ -385,12 +385,6 @@ export default function Levels({
               >
                 🗺 Levels
               </button>
-              <button 
-                className={`sidebar-tab ${sidebarTab === 'objects' ? 'active' : ''}`}
-                onClick={() => setSidebarTab('objects')}
-              >
-                📦 Objects
-              </button>
             </div>
             
             {/* Layers Tab Content */}
@@ -402,25 +396,133 @@ export default function Levels({
                 </div>
                 <div className="layers-list">
                   {/* Entities Layer */}
-                  <div 
-                    className={`layer-item ${activeLayer === LAYERS.ENTITIES ? 'active' : ''}`}
-                    onClick={() => setActiveLayer(LAYERS.ENTITIES)}
-                  >
-                    <button 
-                      className="layer-visibility-btn"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setLayerVisibility(v => ({ ...v, [LAYERS.ENTITIES]: !v[LAYERS.ENTITIES] }))
-                      }}
-                      title={layerVisibility[LAYERS.ENTITIES] ? 'Hide layer' : 'Show layer'}
+                  <div className={`layer-item-group ${activeLayer === LAYERS.ENTITIES ? 'active' : ''}`}>
+                    <div 
+                      className="layer-item"
+                      onClick={() => setActiveLayer(LAYERS.ENTITIES)}
                     >
-                      {layerVisibility[LAYERS.ENTITIES] ? '👁️' : '👁️‍🗨️'}
-                    </button>
-                    <span className="layer-icon">🧑</span>
-                    <span className="layer-name">Entities</span>
-                    <span className="layer-count">
-                      {currentLevelData?.entities?.length || 0}
-                    </span>
+                      <button 
+                        className="layer-visibility-btn"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setLayerVisibility(v => ({ ...v, [LAYERS.ENTITIES]: !v[LAYERS.ENTITIES] }))
+                        }}
+                        title={layerVisibility[LAYERS.ENTITIES] ? 'Hide layer' : 'Show layer'}
+                      >
+                        {layerVisibility[LAYERS.ENTITIES] ? '👁️' : '👁️‍🗨️'}
+                      </button>
+                      <span className="layer-icon">🧑</span>
+                      <span className="layer-name">Entities</span>
+                      <span className="layer-count">
+                        {currentLevelData?.entities?.length || 0}
+                      </span>
+                    </div>
+                    
+                    {/* Object Hierarchy - shown when Entities layer is active and selected */}
+                    {activeLayer === LAYERS.ENTITIES && currentLevel && currentLevelData && (
+                      <div className="object-hierarchy">
+                        {/* Platforms */}
+                        {currentLevelData.platforms && currentLevelData.platforms.length > 0 && (
+                          <div className="object-group">
+                            <div className="object-group-header">
+                              <span className="group-icon">▬</span>
+                              <span className="group-name">Platforms</span>
+                              <span className="count-badge">{currentLevelData.platforms.length}</span>
+                            </div>
+                            <div className="object-items">
+                              {currentLevelData.platforms.map((platform, i) => (
+                                <div 
+                                  key={i} 
+                                  className={`object-item ${activeSelectedObject?.type === 'platform' && activeSelectedObject?.index === i ? 'selected' : ''}`}
+                                  onClick={() => handleSelectObject({ type: 'platform', data: platform, index: i })}
+                                >
+                                  <span className="item-icon">▬</span>
+                                  <span className="item-name">Platform {i + 1}</span>
+                                  <span className="item-coords">@ {platform.x}, {platform.y}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* Entities by type */}
+                        {Object.entries(entityGroups).map(([type, entities]) => {
+                          const typeInfo = getEntityTypeInfo(type)
+                          return (
+                            <div key={type} className="object-group">
+                              <div className="object-group-header">
+                                <span className="group-icon">{typeInfo.emoji}</span>
+                                <span className="group-name">{type}</span>
+                                <span className="count-badge">{entities.length}</span>
+                              </div>
+                              <div className="object-items">
+                                {entities.map((entity, i) => (
+                                  <div 
+                                    key={i}
+                                    className={`object-item ${activeSelectedObject?.type === 'entity' && activeSelectedObject?.data === entity ? 'selected' : ''}`}
+                                    onClick={() => handleSelectObject({ type: 'entity', data: entity, entityType: type, index: i })}
+                                  >
+                                    <span className="item-icon">{typeInfo.emoji}</span>
+                                    <span className="item-name">{entity.name || `${type} ${i + 1}`}</span>
+                                    <span className="item-coords">@ {entity.x}, {entity.y}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )
+                        })}
+                        
+                        {/* Player Spawn */}
+                        {currentLevelData.player_spawn && (
+                          <div className="object-group">
+                            <div className="object-group-header">
+                              <span className="group-icon">🧑</span>
+                              <span className="group-name">Player Spawn</span>
+                            </div>
+                            <div className="object-items">
+                              <div 
+                                className={`object-item ${activeSelectedObject?.type === 'spawn' ? 'selected' : ''}`}
+                                onClick={() => handleSelectObject({ type: 'spawn', data: currentLevelData.player_spawn })}
+                              >
+                                <span className="item-icon">🧑</span>
+                                <span className="item-name">Spawn Point</span>
+                                <span className="item-coords">@ {currentLevelData.player_spawn.x}, {currentLevelData.player_spawn.y}</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* Goal */}
+                        {currentLevelData.goal && (
+                          <div className="object-group">
+                            <div className="object-group-header">
+                              <span className="group-icon">🚩</span>
+                              <span className="group-name">Goal</span>
+                            </div>
+                            <div className="object-items">
+                              <div 
+                                className={`object-item ${activeSelectedObject?.type === 'goal' ? 'selected' : ''}`}
+                                onClick={() => handleSelectObject({ type: 'goal', data: currentLevelData.goal })}
+                              >
+                                <span className="item-icon">🚩</span>
+                                <span className="item-name">Goal Point</span>
+                                <span className="item-coords">@ {currentLevelData.goal.x}, {currentLevelData.goal.y}</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* Empty state */}
+                        {(!currentLevelData.platforms || currentLevelData.platforms.length === 0) && 
+                         (!currentLevelData.entities || currentLevelData.entities.length === 0) &&
+                         !currentLevelData.player_spawn && !currentLevelData.goal && (
+                          <div className="hierarchy-empty">
+                            <span className="empty-icon">📦</span>
+                            <span>No objects in this level</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                   
                   {/* Tilemap Layer */}
@@ -493,122 +595,6 @@ export default function Levels({
                         </div>
                       </button>
                     ))
-                  )}
-                </div>
-              </>
-            )}
-            
-            {/* Objects Tab Content */}
-            {sidebarTab === 'objects' && (
-              <>
-                <div className="levels-sidebar-header">
-                  <h3>Object Hierarchy</h3>
-                  {!currentLevel && <span className="hint-text">Select a level</span>}
-                </div>
-                <div className="levels-sidebar-list objects-list">
-                  {!currentLevel ? (
-                    <div className="empty-levels small">
-                      <div className="empty-icon">📦</div>
-                      <p>Select a level to view objects</p>
-                    </div>
-                  ) : !currentLevelData ? (
-                    <div className="empty-levels small">
-                      <div className="empty-icon">📦</div>
-                      <p>No objects in this level</p>
-                    </div>
-                  ) : (
-                    <>
-                      {/* Platforms */}
-                      {currentLevelData.platforms && currentLevelData.platforms.length > 0 && (
-                        <div className="object-group">
-                          <div className="object-group-header">
-                            <span className="group-icon">▬</span>
-                            <span className="group-name">Platforms</span>
-                            <span className="count-badge">{currentLevelData.platforms.length}</span>
-                          </div>
-                          <div className="object-items">
-                            {currentLevelData.platforms.map((platform, i) => (
-                              <div 
-                                key={i} 
-                                className={`object-item ${activeSelectedObject?.type === 'platform' && activeSelectedObject?.index === i ? 'selected' : ''}`}
-                                onClick={() => handleSelectObject({ type: 'platform', data: platform, index: i })}
-                              >
-                                <span className="item-icon">▬</span>
-                                <span className="item-name">Platform {i + 1}</span>
-                                <span className="item-coords">@ {platform.x}, {platform.y}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      
-                      {/* Entities by type */}
-                      {Object.entries(entityGroups).map(([type, entities]) => {
-                        const typeInfo = getEntityTypeInfo(type)
-                        return (
-                          <div key={type} className="object-group">
-                            <div className="object-group-header">
-                              <span className="group-icon">{typeInfo.emoji}</span>
-                              <span className="group-name">{type}</span>
-                              <span className="count-badge">{entities.length}</span>
-                            </div>
-                            <div className="object-items">
-                              {entities.map((entity, i) => (
-                                <div 
-                                  key={i} 
-                                  className={`object-item ${activeSelectedObject?.type === 'entity' && activeSelectedObject?.index === i && activeSelectedObject?.entityType === type ? 'selected' : ''}`}
-                                  onClick={() => handleSelectObject({ type: 'entity', entityType: type, data: entity, index: i })}
-                                >
-                                  <span className="item-icon">{typeInfo.emoji}</span>
-                                  <span className="item-name">{entity.name || `${type} ${i + 1}`}</span>
-                                  <span className="item-coords">@ {entity.x}, {entity.y}</span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )
-                      })}
-                      
-                      {/* Player Spawn */}
-                      {currentLevelData.player_spawn && (
-                        <div className="object-group">
-                          <div className="object-group-header">
-                            <span className="group-icon">🧑</span>
-                            <span className="group-name">Player Spawn</span>
-                          </div>
-                          <div className="object-items">
-                            <div 
-                              className={`object-item ${activeSelectedObject?.type === 'spawn' ? 'selected' : ''}`}
-                              onClick={() => handleSelectObject({ type: 'spawn', data: currentLevelData.player_spawn })}
-                            >
-                              <span className="item-icon">🧑</span>
-                              <span className="item-name">Spawn Point</span>
-                              <span className="item-coords">@ {currentLevelData.player_spawn.x}, {currentLevelData.player_spawn.y}</span>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                      
-                      {/* Goal */}
-                      {currentLevelData.goal && (
-                        <div className="object-group">
-                          <div className="object-group-header">
-                            <span className="group-icon">🚩</span>
-                            <span className="group-name">Goal</span>
-                          </div>
-                          <div className="object-items">
-                            <div 
-                              className={`object-item ${activeSelectedObject?.type === 'goal' ? 'selected' : ''}`}
-                              onClick={() => handleSelectObject({ type: 'goal', data: currentLevelData.goal })}
-                            >
-                              <span className="item-icon">🚩</span>
-                              <span className="item-name">Goal Point</span>
-                              <span className="item-coords">@ {currentLevelData.goal.x}, {currentLevelData.goal.y}</span>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </>
                   )}
                 </div>
               </>

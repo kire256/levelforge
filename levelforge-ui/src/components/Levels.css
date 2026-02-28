@@ -643,6 +643,48 @@
   line-height: 1.5;
 }
 
+/* Layer Item Group (layer with nested children) */
+.layer-item-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.layer-item-group > .layer-item {
+  border-radius: 8px;
+}
+
+.layer-item-group.active > .layer-item {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+/* Object Hierarchy (nested under Entities layer) */
+.object-hierarchy {
+  padding: 4px 8px 8px;
+  background: var(--bg-primary);
+  border: 2px solid var(--accent-color);
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  margin-top: -2px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.hierarchy-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  gap: 8px;
+}
+
+.hierarchy-empty .empty-icon {
+  font-size: 24px;
+  opacity: 0.5;
+}
+
 /* Canvas Area */
 .canvas-area {
   display: flex;
