@@ -208,8 +208,10 @@ See GitHub issues #16-27 for remaining features. Prioritized:
 - Layer panel:
   - Entities and Tilemap layers with visibility toggles
   - Active layer selection
-  - Tilemap settings display
+  - Object hierarchy nested under Entities layer
 - Integrated into Levels tab
+- Draggable tool palette overlay
+- Merged Objects tab into Layers (expandable under Entities)
 
 ### Bug Fixes & Features
 - Fixed entity position reset bug (sync displayLevel with history)
