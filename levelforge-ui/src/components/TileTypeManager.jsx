@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import './TileTypeManager.css'
+import { API_BASE } from '../utils/api'
 
 const COLLISION_TYPES = [
   { id: 'none', label: 'None', description: 'No collision' },
@@ -55,7 +56,7 @@ export default function TileTypeManager({
     }
 
     try {
-      const res = await fetch(`http://192.168.68.72:8000/api/projects/${projectId}/tile-types`, {
+      const res = await fetch(`${API_BASE}/api/projects/${projectId}/tile-types`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -87,7 +88,7 @@ export default function TileTypeManager({
     }
 
     try {
-      const res = await fetch(`http://192.168.68.72:8000/api/tile-types/${editingTile.id}`, {
+      const res = await fetch(`${API_BASE}/api/tile-types/${editingTile.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -116,7 +117,7 @@ export default function TileTypeManager({
     if (!confirm('Delete this tile type?')) return
 
     try {
-      const res = await fetch(`http://192.168.68.72:8000/api/tile-types/${tileId}`, {
+      const res = await fetch(`${API_BASE}/api/tile-types/${tileId}`, {
         method: 'DELETE'
       })
 

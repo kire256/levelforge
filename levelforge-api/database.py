@@ -78,13 +78,28 @@ def init_db():
         )
     """)
     
+    # App-level key-value settings (API keys, Ollama URL, etc.)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS app_settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+    """)
+
     # Migrations: Add columns if they don't exist
     # Check if tile_size column exists in projects
     cursor.execute("PRAGMA table_info(projects)")
     columns = [col[1] for col in cursor.fetchall()]
     if 'tile_size' not in columns:
         cursor.execute("ALTER TABLE projects ADD COLUMN tile_size INTEGER DEFAULT 32")
-    
+
+    # Check entity_types for metadata_fields column (added in later version)
+    cursor.execute("PRAGMA table_info(entity_types)")
+    et_columns = [col[1] for col in cursor.fetchall()]
+    if 'metadata_fields' not in et_columns:
+        cursor.execute("ALTER TABLE entity_types ADD COLUMN metadata_fields TEXT DEFAULT '[]'")
+
     conn.commit()
     conn.close()
 
@@ -570,6 +585,51 @@ def update_project_tile_size(project_id: int, tile_size: int) -> bool:
     success = cursor.rowcount > 0
     conn.close()
     return success
+
+
+# App settings operations (global key-value store for API keys, etc.)
+
+def get_app_setting(key: str):
+    """Get a single app setting by key."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT value FROM app_settings WHERE key = ?", (key,))
+    row = cursor.fetchone()
+    conn.close()
+    return row[0] if row else None
+
+
+def set_app_setting(key: str, value: str):
+    """Set an app setting (upsert)."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    now = datetime.now().isoformat()
+    cursor.execute(
+        "INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, ?) "
+        "ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
+        (key, value, now)
+    )
+    conn.commit()
+    conn.close()
+
+
+def delete_app_setting(key: str):
+    """Delete an app setting."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM app_settings WHERE key = ?", (key,))
+    conn.commit()
+    conn.close()
+
+
+def get_all_app_settings() -> dict:
+    """Get all app settings as a dict."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT key, value FROM app_settings")
+    rows = cursor.fetchall()
+    conn.close()
+    return {row[0]: row[1] for row in rows}
 
 
 # Initialize on import

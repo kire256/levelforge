@@ -1,6 +1,6 @@
 """
 LevelForge AI - LLM client wrapper.
-Supports OpenAI Codex, z.ai (GLM), Google Gemini, and Ollama.
+Supports OpenAI, Anthropic, Google Gemini, xAI Grok, DeepSeek, Mistral, z.ai (GLM), and Ollama.
 """
 
 import os
@@ -15,6 +15,13 @@ try:
     OPENAI_AVAILABLE = True
 except ImportError:
     OPENAI_AVAILABLE = False
+
+# Try importing anthropic
+try:
+    import anthropic as _anthropic_module
+    ANTHROPIC_AVAILABLE = True
+except ImportError:
+    ANTHROPIC_AVAILABLE = False
 
 # Try importing google-generativeai
 try:
@@ -161,32 +168,146 @@ class OllamaClient(LLMClient):
             return []
 
 
+class AnthropicClient(LLMClient):
+    """Anthropic Claude API client."""
+
+    def __init__(self, api_key: Optional[str] = None):
+        if not ANTHROPIC_AVAILABLE:
+            raise ImportError("anthropic package not installed")
+
+        self.api_key = api_key or os.environ.get("ANTHROPIC_API_KEY")
+        self.client = _anthropic_module.Anthropic(api_key=self.api_key) if self.api_key else None
+
+    def generate(self, prompt: str, model: str = "claude-sonnet-4-6", **kwargs) -> str:
+        """Generate using Anthropic Claude API."""
+        if not self.client:
+            raise ValueError("Anthropic client not initialized - API key required")
+
+        message = self.client.messages.create(
+            model=model,
+            max_tokens=4096,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        return message.content[0].text
+
+    def is_available(self) -> bool:
+        """Check if Anthropic is available."""
+        return bool(self.api_key) and self.client is not None
+
+
+class GrokClient(LLMClient):
+    """xAI Grok API client (OpenAI-compatible)."""
+
+    def __init__(self, api_key: Optional[str] = None):
+        if not OPENAI_AVAILABLE:
+            raise ImportError("openai package not installed")
+
+        self.api_key = api_key or os.environ.get("XAI_API_KEY")
+        self.client = OpenAI(api_key=self.api_key, base_url="https://api.x.ai/v1") if self.api_key else None
+
+    def generate(self, prompt: str, model: str = "grok-2-latest", **kwargs) -> str:
+        """Generate using xAI Grok API."""
+        if not self.client:
+            raise ValueError("Grok client not initialized - API key required")
+
+        response = self.client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": prompt}],
+            **kwargs
+        )
+        return response.choices[0].message.content
+
+    def is_available(self) -> bool:
+        """Check if Grok is available."""
+        return bool(self.api_key) and self.client is not None
+
+
+class DeepSeekClient(LLMClient):
+    """DeepSeek API client (OpenAI-compatible)."""
+
+    def __init__(self, api_key: Optional[str] = None):
+        if not OPENAI_AVAILABLE:
+            raise ImportError("openai package not installed")
+
+        self.api_key = api_key or os.environ.get("DEEPSEEK_API_KEY")
+        self.client = OpenAI(api_key=self.api_key, base_url="https://api.deepseek.com/v1") if self.api_key else None
+
+    def generate(self, prompt: str, model: str = "deepseek-chat", **kwargs) -> str:
+        """Generate using DeepSeek API."""
+        if not self.client:
+            raise ValueError("DeepSeek client not initialized - API key required")
+
+        response = self.client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": prompt}],
+            **kwargs
+        )
+        return response.choices[0].message.content
+
+    def is_available(self) -> bool:
+        """Check if DeepSeek is available."""
+        return bool(self.api_key) and self.client is not None
+
+
+class MistralClient(LLMClient):
+    """Mistral AI API client (OpenAI-compatible)."""
+
+    def __init__(self, api_key: Optional[str] = None):
+        if not OPENAI_AVAILABLE:
+            raise ImportError("openai package not installed")
+
+        self.api_key = api_key or os.environ.get("MISTRAL_API_KEY")
+        self.client = OpenAI(api_key=self.api_key, base_url="https://api.mistral.ai/v1") if self.api_key else None
+
+    def generate(self, prompt: str, model: str = "mistral-large-latest", **kwargs) -> str:
+        """Generate using Mistral AI API."""
+        if not self.client:
+            raise ValueError("Mistral client not initialized - API key required")
+
+        response = self.client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": prompt}],
+            **kwargs
+        )
+        return response.choices[0].message.content
+
+    def is_available(self) -> bool:
+        """Check if Mistral is available."""
+        return bool(self.api_key) and self.client is not None
+
+
 class LLMFactory:
     """Factory for creating LLM clients."""
-    
+
     @staticmethod
     def create(client_type: str, **kwargs) -> LLMClient:
         """Create an LLM client by type."""
         clients = {
             "openai": OpenAIClient,
             "codex": OpenAIClient,
+            "anthropic": AnthropicClient,
+            "claude": AnthropicClient,
             "gemini": GeminiClient,
             "google": GeminiClient,
+            "grok": GrokClient,
+            "xai": GrokClient,
+            "deepseek": DeepSeekClient,
+            "mistral": MistralClient,
             "z-ai": ZAIClient,
             "glm": ZAIClient,
             "ollama": OllamaClient,
         }
-        
+
         if client_type.lower() not in clients:
             raise ValueError(f"Unknown client type: {client_type}")
-        
+
         return clients[client_type.lower()](**kwargs)
-    
+
     @staticmethod
     def get_best_available() -> Optional[LLMClient]:
         """Get the best available LLM client."""
         # Try each client in order of preference
-        
+
         # 1. Try OpenAI (highest quality)
         try:
             client = OpenAIClient()
@@ -194,31 +315,63 @@ class LLMFactory:
                 return client
         except:
             pass
-        
-        # 2. Try Gemini
+
+        # 2. Try Anthropic
+        try:
+            client = AnthropicClient()
+            if client.is_available():
+                return client
+        except:
+            pass
+
+        # 3. Try Gemini
         try:
             client = GeminiClient()
             if client.is_available():
                 return client
         except:
             pass
-        
-        # 3. Try z.ai
+
+        # 4. Try Grok
+        try:
+            client = GrokClient()
+            if client.is_available():
+                return client
+        except:
+            pass
+
+        # 5. Try DeepSeek
+        try:
+            client = DeepSeekClient()
+            if client.is_available():
+                return client
+        except:
+            pass
+
+        # 6. Try Mistral
+        try:
+            client = MistralClient()
+            if client.is_available():
+                return client
+        except:
+            pass
+
+        # 7. Try z.ai
         try:
             client = ZAIClient()
             if client.is_available():
                 return client
         except:
             pass
-        
-        # 4. Try Ollama (local)
+
+        # 8. Try Ollama (local)
         try:
             client = OllamaClient()
             if client.is_available():
                 return client
         except:
             pass
-        
+
         return None
 
 

@@ -8,8 +8,7 @@ import AITools from './components/AITools'
 import Settings from './components/Settings'
 import { useUndoRedo } from './hooks/useUndoRedo'
 import './App.css'
-
-const API_BASE = 'http://192.168.68.72:8000'
+import { API_BASE } from './utils/api'
 
 function App() {
   // Navigation state
@@ -1231,6 +1230,7 @@ Built with ❤️ by OpenClaw`)
             availableModels={availableModels}
             selectedModel={selectedModel}
             onModelChange={handleModelChange}
+            onRefreshModels={loadModels}
             theme={theme}
             accentColor={accentColor}
             onThemeChange={setTheme}

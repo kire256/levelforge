@@ -3,6 +3,7 @@ import LevelView from './LevelView'
 import EntityRequirements from './EntityRequirements'
 import TilemapCanvas, { TOOLS } from './TilemapCanvas'
 import './Levels.css'
+import { API_BASE } from '../utils/api'
 
 const GENRES = [
   { id: 'platformer', name: 'Platformer', icon: '🎮' },
@@ -90,12 +91,12 @@ export default function Levels({
   // Load entity and tile types when project changes
   useEffect(() => {
     if (currentProject) {
-      fetch(`http://192.168.68.72:8000/api/projects/${currentProject.id}/entity-types`)
+      fetch(`${API_BASE}/api/projects/${currentProject.id}/entity-types`)
         .then(res => res.json())
         .then(data => setEntityTypes(data))
         .catch(err => console.error('Failed to load entity types:', err))
       
-      fetch(`http://192.168.68.72:8000/api/projects/${currentProject.id}/tile-types`)
+      fetch(`${API_BASE}/api/projects/${currentProject.id}/tile-types`)
         .then(res => res.json())
         .then(data => {
           setTileTypes(data)

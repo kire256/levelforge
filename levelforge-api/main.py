@@ -27,7 +27,7 @@ app = FastAPI(
 # Enable CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:5174", "http://localhost:4173", "http://localhost:3000", "http://192.168.68.72:5173", "http://192.168.68.72:4173"],
+    allow_origins=["http://localhost:5173", "http://localhost:5174", "http://localhost:4173", "http://localhost:3000", "http://192.168.68.72:5173", "http://192.168.68.72:4173", "http://192.168.68.76:5173", "http://192.168.68.76:4173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -42,8 +42,10 @@ def get_generator() -> LevelGenerator:
     global _generator, _current_model
     if _generator is None:
         try:
+            import database as db
             _current_model = _current_model or "llama3.2:latest"
-            _generator = create_generator(client_type="ollama", model=_current_model, base_url="http://192.168.68.76:11434")
+            ollama_url = db.get_app_setting("ollama_url") or "http://192.168.68.76:11434"
+            _generator = create_generator(client_type="ollama", model=_current_model, base_url=ollama_url)
             logger.info(f"Level generator initialized with model {_current_model}")
         except Exception as e:
             logger.error(f"Failed to initialize generator: {e}")
@@ -71,6 +73,42 @@ class RefinementRequest(BaseModel):
 
 class ModelRequest(BaseModel):
     model: str
+
+
+class ApiKeysRequest(BaseModel):
+    openai: Optional[str] = None
+    anthropic: Optional[str] = None
+    gemini: Optional[str] = None
+    grok: Optional[str] = None
+    deepseek: Optional[str] = None
+    mistral: Optional[str] = None
+    zai: Optional[str] = None
+    ollama_url: Optional[str] = None
+
+
+def _get_ollama_url() -> str:
+    """Return the configured Ollama URL from DB, with fallback."""
+    import database as db
+    return db.get_app_setting("ollama_url") or "http://192.168.68.76:11434"
+
+
+def _get_stored_key(provider: str, env_var: Optional[str]) -> Optional[str]:
+    """Return API key from DB if set, otherwise fall back to env var."""
+    import database as db
+    import os
+    key = db.get_app_setting(f"api_key_{provider}")
+    if key:
+        return key
+    return os.environ.get(env_var) if env_var else None
+
+
+def _mask_key(key: Optional[str]) -> Optional[str]:
+    """Return a masked version of an API key for display."""
+    if not key:
+        return None
+    if len(key) <= 8:
+        return "****"
+    return key[:4] + "****" + key[-4:]
 
 
 @app.get("/")
@@ -104,46 +142,172 @@ async def health():
 async def get_models():
     """Get available AI models from all providers."""
     import requests
-    
+
     result = {
         "providers": {},
         "current": _current_model,
         "current_provider": _current_provider
     }
-    
-    # Get Ollama models
+
+    # Ollama (local — no key needed)
+    import database as db
+    ollama_url = db.get_app_setting("ollama_url") or "http://192.168.68.76:11434"
     try:
-        resp = requests.get("http://192.168.68.76:11434/api/tags", timeout=5)
+        resp = requests.get(f"{ollama_url}/api/tags", timeout=5)
         models = resp.json().get("models", [])
-        result["providers"]["ollama"] = [{"name": f"ollama:{m['name']}", "display": m["name"], "size": m.get("size", 0)} for m in models]
+        result["providers"]["ollama"] = [
+            {"name": f"ollama:{m['name']}", "display": m["name"], "size": m.get("size", 0)}
+            for m in models
+        ]
     except:
         result["providers"]["ollama"] = []
-    
-    # Check z-ai availability
-    import os
-    zai_key = os.environ.get("ZAI_API_KEY")
+
+    # OpenAI
+    openai_key = _get_stored_key("openai", "OPENAI_API_KEY")
+    if openai_key:
+        result["providers"]["openai"] = [
+            {"name": "openai:gpt-4o", "display": "GPT-4o"},
+            {"name": "openai:gpt-4o-mini", "display": "GPT-4o Mini"},
+            {"name": "openai:gpt-4-turbo", "display": "GPT-4 Turbo"},
+            {"name": "openai:o3-mini", "display": "o3 Mini"},
+        ]
+    else:
+        result["providers"]["openai"] = []
+
+    # Anthropic
+    anthropic_key = _get_stored_key("anthropic", "ANTHROPIC_API_KEY")
+    if anthropic_key:
+        result["providers"]["anthropic"] = [
+            {"name": "anthropic:claude-opus-4-6", "display": "Claude Opus 4.6"},
+            {"name": "anthropic:claude-sonnet-4-6", "display": "Claude Sonnet 4.6"},
+            {"name": "anthropic:claude-haiku-4-5-20251001", "display": "Claude Haiku 4.5"},
+            {"name": "anthropic:claude-3-5-sonnet-20241022", "display": "Claude 3.5 Sonnet"},
+        ]
+    else:
+        result["providers"]["anthropic"] = []
+
+    # Google Gemini
+    gemini_key = _get_stored_key("gemini", "GOOGLE_API_KEY") or _get_stored_key("gemini", "GEMINI_API_KEY")
+    if gemini_key:
+        result["providers"]["gemini"] = [
+            {"name": "gemini:gemini-2.0-flash", "display": "Gemini 2.0 Flash"},
+            {"name": "gemini:gemini-1.5-pro", "display": "Gemini 1.5 Pro"},
+            {"name": "gemini:gemini-1.5-flash", "display": "Gemini 1.5 Flash"},
+        ]
+    else:
+        result["providers"]["gemini"] = []
+
+    # xAI Grok
+    grok_key = _get_stored_key("grok", "XAI_API_KEY")
+    if grok_key:
+        result["providers"]["grok"] = [
+            {"name": "grok:grok-2-latest", "display": "Grok 2"},
+            {"name": "grok:grok-2-mini", "display": "Grok 2 Mini"},
+        ]
+    else:
+        result["providers"]["grok"] = []
+
+    # DeepSeek
+    deepseek_key = _get_stored_key("deepseek", "DEEPSEEK_API_KEY")
+    if deepseek_key:
+        result["providers"]["deepseek"] = [
+            {"name": "deepseek:deepseek-chat", "display": "DeepSeek Chat"},
+            {"name": "deepseek:deepseek-reasoner", "display": "DeepSeek Reasoner"},
+        ]
+    else:
+        result["providers"]["deepseek"] = []
+
+    # Mistral
+    mistral_key = _get_stored_key("mistral", "MISTRAL_API_KEY")
+    if mistral_key:
+        result["providers"]["mistral"] = [
+            {"name": "mistral:mistral-large-latest", "display": "Mistral Large"},
+            {"name": "mistral:mistral-small-latest", "display": "Mistral Small"},
+        ]
+    else:
+        result["providers"]["mistral"] = []
+
+    # Z-AI (GLM)
+    zai_key = _get_stored_key("zai", "ZAI_API_KEY")
     if zai_key:
         result["providers"]["z-ai"] = [
-            {"name": "z-ai:glm-5", "display": "GLM-5"},
-            {"name": "z-ai:glm-4.7", "display": "GLM-4.7"},
-            {"name": "z-ai:glm-4.6", "display": "GLM-4.6"},
-            {"name": "z-ai:glm-4.5", "display": "GLM-4.5"}
+            {"name": "z-ai:glm-4-plus", "display": "GLM-4 Plus"},
+            {"name": "z-ai:glm-4-flash", "display": "GLM-4 Flash"},
         ]
     else:
         result["providers"]["z-ai"] = []
-    
-    # Check OpenAI/Codex availability
-    openai_key = os.environ.get("OPENAI_API_KEY")
-    if openai_key:
-        result["providers"]["codex"] = [
-            {"name": "codex:gpt-4o", "display": "GPT-4o"},
-            {"name": "codex:gpt-4o-mini", "display": "GPT-4o Mini"},
-            {"name": "codex:gpt-4-turbo", "display": "GPT-4 Turbo"}
-        ]
-    else:
-        result["providers"]["codex"] = []
-    
+
     return result
+
+
+@app.get("/api/settings/keys")
+async def get_api_keys():
+    """Get configured API key status (masked values) for all providers."""
+    import database as db
+
+    providers = [
+        ("openai", "OPENAI_API_KEY"),
+        ("anthropic", "ANTHROPIC_API_KEY"),
+        ("gemini", "GOOGLE_API_KEY"),
+        ("grok", "XAI_API_KEY"),
+        ("deepseek", "DEEPSEEK_API_KEY"),
+        ("mistral", "MISTRAL_API_KEY"),
+        ("zai", "ZAI_API_KEY"),
+    ]
+    import os as _os
+    result = {}
+    for provider, env_var in providers:
+        db_key = db.get_app_setting(f"api_key_{provider}")
+        env_key = _os.environ.get(env_var)
+        active_key = db_key or env_key
+        result[provider] = {
+            "configured": bool(active_key),
+            "masked_key": _mask_key(active_key),
+            "source": "db" if db_key else ("env" if env_key else None),
+        }
+    result["ollama_url"] = {
+        "configured": True,
+        "value": db.get_app_setting("ollama_url") or "http://192.168.68.76:11434",
+    }
+    return result
+
+
+@app.post("/api/settings/keys")
+async def save_api_keys(request: ApiKeysRequest):
+    """Save API keys and Ollama URL to the database."""
+    import database as db
+
+    saved = []
+    cleared = []
+
+    key_map = {
+        "openai": request.openai,
+        "anthropic": request.anthropic,
+        "gemini": request.gemini,
+        "grok": request.grok,
+        "deepseek": request.deepseek,
+        "mistral": request.mistral,
+        "zai": request.zai,
+    }
+
+    for provider, value in key_map.items():
+        if value is None:
+            continue  # Not included in request — leave unchanged
+        if value.strip() == "":
+            db.delete_app_setting(f"api_key_{provider}")
+            cleared.append(provider)
+        else:
+            db.set_app_setting(f"api_key_{provider}", value.strip())
+            saved.append(provider)
+
+    if request.ollama_url is not None:
+        url = request.ollama_url.strip()
+        if url:
+            db.set_app_setting("ollama_url", url)
+        else:
+            db.delete_app_setting("ollama_url")
+
+    return {"success": True, "saved": saved, "cleared": cleared}
 
 
 @app.post("/api/models")
@@ -163,30 +327,48 @@ _current_provider: str = "ollama"
 def recreate_generator(model: str) -> LevelGenerator:
     """Recreate the generator with a new model/provider."""
     global _generator, _current_model, _current_provider
-    
+
     # Parse model string (format: "provider:model")
     if ":" in model:
         provider, model_name = model.split(":", 1)
-        _current_provider = provider
-        _current_model = model_name
     else:
-        # Default to ollama if just model name
         provider = "ollama"
         model_name = model
-        _current_provider = provider
-        _current_model = model_name
-    
+
+    _current_provider = provider
+    _current_model = model_name
+
+    import database as db
+
     try:
         if provider == "ollama":
-            _generator = create_generator(client_type="ollama", model=model_name, base_url="http://192.168.68.76:11434")
+            ollama_url = db.get_app_setting("ollama_url") or "http://192.168.68.76:11434"
+            _generator = create_generator(client_type="ollama", model=model_name, base_url=ollama_url)
+        elif provider in ("openai", "codex"):
+            api_key = _get_stored_key("openai", "OPENAI_API_KEY")
+            _generator = create_generator(client_type="openai", model=model_name, api_key=api_key)
+        elif provider == "anthropic":
+            api_key = _get_stored_key("anthropic", "ANTHROPIC_API_KEY")
+            _generator = create_generator(client_type="anthropic", model=model_name, api_key=api_key)
+        elif provider == "gemini":
+            api_key = _get_stored_key("gemini", "GOOGLE_API_KEY") or _get_stored_key("gemini", "GEMINI_API_KEY")
+            _generator = create_generator(client_type="gemini", model=model_name, api_key=api_key)
+        elif provider == "grok":
+            api_key = _get_stored_key("grok", "XAI_API_KEY")
+            _generator = create_generator(client_type="grok", model=model_name, api_key=api_key)
+        elif provider == "deepseek":
+            api_key = _get_stored_key("deepseek", "DEEPSEEK_API_KEY")
+            _generator = create_generator(client_type="deepseek", model=model_name, api_key=api_key)
+        elif provider == "mistral":
+            api_key = _get_stored_key("mistral", "MISTRAL_API_KEY")
+            _generator = create_generator(client_type="mistral", model=model_name, api_key=api_key)
         elif provider == "z-ai":
-            # Use the model name directly for Z-AI
-            _generator = create_generator(client_type="z-ai", model=model_name)
-        elif provider == "codex":
-            _generator = create_generator(client_type="codex", model=model_name)
+            api_key = _get_stored_key("zai", "ZAI_API_KEY")
+            _generator = create_generator(client_type="z-ai", model=model_name, api_key=api_key)
         else:
-            _generator = create_generator(client_type="ollama", model=model_name, base_url="http://192.168.68.76:11434")
-        
+            ollama_url = db.get_app_setting("ollama_url") or "http://192.168.68.76:11434"
+            _generator = create_generator(client_type="ollama", model=model_name, base_url=ollama_url)
+
         logger.info(f"Level generator recreated with {provider}:{model_name}")
     except Exception as e:
         logger.error(f"Failed to recreate generator: {e}")
@@ -331,9 +513,9 @@ def generate_with_fallback(generator, genre, level_type, difficulty, full_requir
             logger.warning(f"Rate limit hit, falling back to Ollama: {error_str}")
             try:
                 fallback_generator = create_generator(
-                    client_type="ollama", 
-                    model="llama3.2:latest", 
-                    base_url="http://192.168.68.76:11434"
+                    client_type="ollama",
+                    model="llama3.2:latest",
+                    base_url=_get_ollama_url()
                 )
                 if genre == "platformer":
                     if level_type == "metroidvania":
@@ -418,7 +600,7 @@ async def generate_level_events(request: GenerationRequest):
                 yield f"data: {json.dumps({'event': 'progress', 'step': 'fallback', 'message': 'Rate limit hit, falling back to Ollama...', 'progress': 45})}\n\n"
                 await asyncio.sleep(0.1)
                 # Retry the whole generation with Ollama
-                generator = create_generator(client_type="ollama", model="llama3.2:latest", base_url="http://192.168.68.76:11434")
+                generator = create_generator(client_type="ollama", model="llama3.2:latest", base_url=_get_ollama_url())
                 result = generate_with_fallback(
                     generator=generator,
                     genre=request.genre,

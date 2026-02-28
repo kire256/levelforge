@@ -12,7 +12,17 @@
       "Bash(PYTHONPATH=c:/p/levelforge c:/p/levelforge/levelforge/venv/Scripts/python.exe -c \"import sys; sys.path.insert\\(0,''c:/p/levelforge''\\); from levelforge.src.core.generation.generator import LevelGenerator; from levelforge.src.ai.clients.llm_client import LLMFactory; import main; print\\(''API imports OK''\\)\")",
       "Bash(netstat -ano)",
       "Bash(node_modules/.bin/vite --host)",
-      "Bash(npm install)"
+      "Bash(npm install)",
+      "Bash(/c/p/levelforge/levelforge/venv/Scripts/python.exe -c \"import sys; print\\(sys.version\\); import uvicorn; print\\(''uvicorn:'', uvicorn.__version__\\)\")",
+      "Bash(/c/p/levelforge/levelforge/venv/Scripts/python.exe -c \":*)",
+      "Bash(curl -s http://localhost:8000/)",
+      "Bash(curl -s http://localhost:8000/api/settings/keys)",
+      "Bash(curl -s -X POST http://localhost:8000/api/settings/keys -H \"Content-Type: application/json\" -d '{\"\"openai\"\": \"\"sk-test-key-123456789\"\", \"\"ollama_url\"\": \"\"http://192.168.68.76:11434\"\"}')",
+      "Bash(curl -s http://192.168.68.72:8000/api/settings/keys)",
+      "Bash(curl -s -X POST http://192.168.68.72:8000/api/settings/keys -H \"Content-Type: application/json\" -d '{\"\"openai\"\": \"\"\"\", \"\"ollama_url\"\": \"\"http://192.168.68.76:11434\"\"}')",
+      "Bash(ipconfig)",
+      "Bash(curl -s http://192.168.68.76:8000/api/settings/keys)",
+      "Bash(curl -s http://192.168.68.72:8000/)"
     ]
   }
 }
