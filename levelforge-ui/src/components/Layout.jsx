@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import UndoRedoControls from './UndoRedoControls'
+import { getFullVersion } from '../version'
 import './Layout.css'
 
 // Menu configurations (generated dynamically)
@@ -747,6 +748,35 @@ export default function Layout({
                   <p className="hint">Create a new project from the Dashboard</p>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* About Modal */}
+      {showAboutModal && (
+        <div className="modal-overlay" onClick={onCloseAboutModal}>
+          <div className="modal about-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>About LevelForge AI</h2>
+              <button className="modal-close" onClick={onCloseAboutModal}>×</button>
+            </div>
+            <div className="modal-content">
+              <div className="about-logo">🎮</div>
+              <h3>LevelForge AI</h3>
+              <p className="about-tagline">AI-powered level design tool</p>
+              <div className="about-version">
+                <span className="version-label">Version:</span>
+                <span className="version-number">{getFullVersion()}</span>
+              </div>
+              <div className="about-links">
+                <a href="https://github.com/kire256/levelforge" target="_blank" rel="noopener noreferrer">
+                  GitHub Repository
+                </a>
+              </div>
+              <div className="about-description">
+                <p>LevelForge uses AI to generate platformer levels with entities, platforms, and tilemaps. Create, edit, and export levels for your games.</p>
+              </div>
             </div>
           </div>
         </div>

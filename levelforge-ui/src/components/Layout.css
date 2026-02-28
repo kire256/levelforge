@@ -1145,3 +1145,70 @@ html, body, #root {
   font-size: 0.85rem;
   opacity: 0.7;
 }
+
+/* About Modal */
+.about-modal {
+  max-width: 400px;
+}
+
+.about-modal .modal-content {
+  text-align: center;
+  padding: 32px;
+}
+
+.about-logo {
+  font-size: 4rem;
+  margin-bottom: 16px;
+}
+
+.about-modal h3 {
+  margin: 0 0 8px 0;
+  font-size: 1.5rem;
+}
+
+.about-tagline {
+  color: var(--text-secondary);
+  margin: 0 0 24px 0;
+}
+
+.about-version {
+  display: inline-flex;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--bg-tertiary);
+  border-radius: 6px;
+  margin-bottom: 20px;
+}
+
+.version-label {
+  color: var(--text-secondary);
+}
+
+.version-number {
+  font-family: monospace;
+  font-weight: 600;
+}
+
+.about-links {
+  margin-bottom: 20px;
+}
+
+.about-links a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.about-links a:hover {
+  text-decoration: underline;
+}
+
+.about-description {
+  text-align: left;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+.about-description p {
+  margin: 0;
+}

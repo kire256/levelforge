@@ -1,4 +1,19 @@
-// This file is auto-generated during build
-export const BUILD_VERSION = '2026.02.27-4';
-export const BUILD_COMMIT = 'd6ed7a8';
-export const BUILD_TIME = '2026-02-27T22:23:00-06:00';
+// Build version information
+// Increment VERSION.build with each release
+
+const VERSION = {
+  major: 0,
+  minor: 2,
+  patch: 0,
+  build: 69
+}
+
+export const BUILD_VERSION = `v${VERSION.major}.${VERSION.minor}.${VERSION.patch}`
+export const BUILD_COMMIT = 'main'
+export const BUILD_TIME = new Date().toISOString().split('T')[0]
+
+export const getFullVersion = () => {
+  return `v${VERSION.major}.${VERSION.minor}.${VERSION.patch} (build ${VERSION.build})`
+}
+
+export const VERSION_INFO = VERSION

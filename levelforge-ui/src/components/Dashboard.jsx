@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { BUILD_VERSION, BUILD_COMMIT, BUILD_TIME } from '../version'
+import { BUILD_VERSION, getFullVersion } from '../version'
 import './Dashboard.css'
 
 export default function Dashboard({ 
@@ -23,6 +23,7 @@ export default function Dashboard({
       <header className="dashboard-header">
         <h1>Dashboard</h1>
         <p>Welcome back! Here's your LevelForge overview.</p>
+        <span className="version-badge">{getFullVersion()}</span>
       </header>
       
       {/* Stats Row */}
