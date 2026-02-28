@@ -654,7 +654,7 @@ export default function Levels({
                             selectedTileId={selectedTileId}
                             tool={selectedTool}
                             tileSize={currentProject?.tile_size || 32}
-                            showGrid={showGrid}
+                            showGrid={showGrid && activeLayer === LAYERS.TILEMAP}
                             onTileChange={handleTileChange}
                             interactive={activeLayer === LAYERS.TILEMAP}
                             externalZoom={sharedZoom}
