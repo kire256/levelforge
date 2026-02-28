@@ -92,7 +92,7 @@ const ENTITY_COLORS = {
   unknown: '#9ca3af'
 }
 
-export default function LevelView({ level, mode = 'draft', onModeChange, entityTypes = [], onRename, selectedObject, onSelectObject, onUpdateObject, snapToGrid = false, showGrid = true, gridSize = 50 }) {
+export default function LevelView({ level, mode = 'draft', onModeChange, entityTypes = [], onRename, selectedObject, onSelectObject, onUpdateObject, snapToGrid = false, showGrid = true, gridSize = 50, interactive = true }) {
   const canvasRef = useRef(null)
   const [viewMode, setViewMode] = useState(mode) // draft, polish, playable
   const [zoom, setZoom] = useState(1)
@@ -816,7 +816,7 @@ export default function LevelView({ level, mode = 'draft', onModeChange, entityT
   }
   
   return (
-    <div className="level-view">
+    <div className={`level-view ${!interactive ? 'non-interactive' : ''}`}>
       {/* View Mode Tabs */}
       <div className="view-mode-bar">
         <div className="view-mode-tabs">

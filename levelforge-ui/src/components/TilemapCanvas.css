@@ -7,6 +7,15 @@
   overflow: hidden;
 }
 
+.tilemap-canvas-container.non-interactive {
+  pointer-events: none;
+}
+
+.tilemap-canvas-container.non-interactive .canvas-controls,
+.tilemap-canvas-container.non-interactive .tile-coords {
+  display: none;
+}
+
 .tilemap-canvas {
   display: block;
   width: 100%;

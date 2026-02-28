@@ -654,3 +654,26 @@
   flex: 1;
   overflow: hidden;
 }
+
+/* Layered Canvas - both layers visible */
+.layered-canvas {
+  position: relative;
+}
+
+.canvas-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.canvas-layer.interactive {
+  pointer-events: auto;
+}
+
+.tilemap-layer {
+  z-index: 1;
+}
+
+.entities-layer {
+  z-index: 2;
+}

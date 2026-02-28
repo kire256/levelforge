@@ -78,6 +78,7 @@ export default function Levels({
   const [tileTypes, setTileTypes] = useState([])
   const [selectedTileId, setSelectedTileId] = useState(null)
   const [selectedTool, setSelectedTool] = useState(TOOLS.PENCIL)
+  const [tilemapData, setTilemapData] = useState(null)
   
   // Load entity types when project changes
   const [entityTypes, setEntityTypes] = useState([])
@@ -103,14 +104,19 @@ export default function Levels({
     }
   }, [currentProject])
   
+  // Sync tilemap data with current level
   useEffect(() => {
-    if (currentProject) {
-      fetch(`http://192.168.68.72:8000/api/projects/${currentProject.id}/entity-types`)
-        .then(res => res.json())
-        .then(data => setEntityTypes(data))
-        .catch(err => console.error('Failed to load entity types:', err))
+    if (currentLevelData?.tilemap) {
+      setTilemapData(currentLevelData.tilemap)
+    } else {
+      // Default empty tilemap
+      setTilemapData({
+        width: 50,
+        height: 30,
+        data: Array(30).fill(null).map(() => Array(50).fill(null))
+      })
     }
-  }, [currentProject])
+  }, [currentLevelData?.tilemap])
 
   useEffect(() => {
     if (externalViewMode !== undefined) setViewMode(externalViewMode)
@@ -202,6 +208,20 @@ export default function Levels({
     }
     return defaults[type.toLowerCase()] || { emoji: '📦', color: '#9ca3af' }
   }, [entityTypes])
+  
+  // Tile change handler
+  const handleTileChange = useCallback((x, y, tileId) => {
+    setTilemapData(prev => {
+      if (!prev) return prev
+      // Create a deep copy of the data array
+      const newData = prev.data.map(row => [...row])
+      // Update the tile at (x, y)
+      if (newData[y]) {
+        newData[y][x] = tileId
+      }
+      return { ...prev, data: newData }
+    })
+  }, [])
   
   // Object selection handlers
   const handleSelectObject = useCallback((obj) => {
@@ -545,34 +565,41 @@ export default function Levels({
               <div className="canvas-area">
                 {currentLevel ? (
                   <>
-                    {/* Main Canvas */}
-                    <div className="canvas-view">
-                      {activeLayer === LAYERS.ENTITIES ? (
-                        <LevelView 
-                          level={currentLevel} 
-                          mode="draft" 
-                          entityTypes={entityTypes || []} 
-                          onRename={onRenameLevel}
-                          selectedObject={activeSelectedObject}
-                          onSelectObject={handleSelectObject}
-                          onUpdateObject={onUpdateObject}
-                          snapToGrid={snapToGrid}
-                          showGrid={showGrid}
-                          gridSize={gridSize}
-                        />
-                      ) : (
-                        <TilemapCanvas
-                          tilemap={currentLevelData?.tilemap || { width: 50, height: 30, data: [] }}
-                          tileTypes={tileTypes}
-                          selectedTileId={selectedTileId}
-                          tool={selectedTool}
-                          tileSize={currentProject?.tile_size || 32}
-                          showGrid={showGrid}
-                          onTileChange={(x, y, tileId) => {
-                            // TODO: Implement tile change persistence
-                            console.log('Tile change:', x, y, tileId)
-                          }}
-                        />
+                    {/* Main Canvas - Both layers render simultaneously */}
+                    <div className="canvas-view layered-canvas">
+                      {/* Tilemap Layer (renders first, underneath) */}
+                      {layerVisibility[LAYERS.TILEMAP] && (
+                        <div className="canvas-layer tilemap-layer">
+                          <TilemapCanvas
+                            tilemap={tilemapData || { width: 50, height: 30, data: [] }}
+                            tileTypes={tileTypes}
+                            selectedTileId={selectedTileId}
+                            tool={selectedTool}
+                            tileSize={currentProject?.tile_size || 32}
+                            showGrid={showGrid && activeLayer === LAYERS.TILEMAP}
+                            onTileChange={handleTileChange}
+                            interactive={activeLayer === LAYERS.TILEMAP}
+                          />
+                        </div>
+                      )}
+                      
+                      {/* Entities Layer (renders on top) */}
+                      {layerVisibility[LAYERS.ENTITIES] && (
+                        <div className="canvas-layer entities-layer">
+                          <LevelView 
+                            level={currentLevel} 
+                            mode="draft" 
+                            entityTypes={entityTypes || []} 
+                            onRename={onRenameLevel}
+                            selectedObject={activeSelectedObject}
+                            onSelectObject={handleSelectObject}
+                            onUpdateObject={onUpdateObject}
+                            snapToGrid={snapToGrid}
+                            showGrid={showGrid && activeLayer === LAYERS.ENTITIES}
+                            gridSize={gridSize}
+                            interactive={activeLayer === LAYERS.ENTITIES}
+                          />
+                        </div>
                       )}
                     </div>
                     

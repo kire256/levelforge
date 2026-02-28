@@ -7,6 +7,17 @@
   background: var(--bg-main);
 }
 
+.level-view.non-interactive {
+  pointer-events: none;
+}
+
+.level-view.non-interactive .level-toolbar,
+.level-view.non-interactive .view-mode-bar,
+.level-view.non-interactive .level-info-panel,
+.level-view.non-interactive .legend-panel {
+  display: none;
+}
+
 .level-view-empty {
   display: flex;
   flex-direction: column;

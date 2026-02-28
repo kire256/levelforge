@@ -19,6 +19,7 @@ export default function TilemapCanvas({
   showGrid = true,
   snapToGrid = false,
   onTileChange,
+  interactive = true,
 }) {
   const canvasRef = useRef(null)
   const [zoom, setZoom] = useState(1)
@@ -341,7 +342,7 @@ export default function TilemapCanvas({
   }
   
   return (
-    <div className="tilemap-canvas-container">
+    <div className={`tilemap-canvas-container ${!interactive ? 'non-interactive' : ''}`}>
       {/* Controls */}
       <div className="canvas-controls">
         <button onClick={handleZoomOut} title="Zoom Out">➖</button>
