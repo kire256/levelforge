@@ -22,7 +22,19 @@
       "Bash(curl -s -X POST http://192.168.68.72:8000/api/settings/keys -H \"Content-Type: application/json\" -d '{\"\"openai\"\": \"\"\"\", \"\"ollama_url\"\": \"\"http://192.168.68.76:11434\"\"}')",
       "Bash(ipconfig)",
       "Bash(curl -s http://192.168.68.76:8000/api/settings/keys)",
-      "Bash(curl -s http://192.168.68.72:8000/)"
+      "Bash(curl -s http://192.168.68.72:8000/)",
+      "Bash(python demo_semantic_grid.py)",
+      "Bash(node --input-type=module --eval \"import { Cell, SemanticGrid32 } from ''c:/p/levelforge/levelforge-ui/src/models/semanticGrid.js''; const g = new SemanticGrid32\\(\\); g.applyRect\\(0,31,32,1,Cell.SOLID\\); const data = g.toJSON\\(\\); const h = SemanticGrid32.fromJSON\\(data\\); console.log\\(''JS import OK, equals:'', g.equals\\(h\\), ''JSON size:'', JSON.stringify\\(data\\).length\\);\")",
+      "Bash(node --input-type=module --eval \"import { Cell, SemanticGrid32 } from ''./semanticGrid.js''; const g = new SemanticGrid32\\(\\); g.applyRect\\(0,31,32,1,Cell.SOLID\\); const data = g.toJSON\\(\\); const h = SemanticGrid32.fromJSON\\(data\\); console.log\\(''JS OK, equals:'', g.equals\\(h\\), ''JSON bytes:'', JSON.stringify\\(data\\).length\\);\")",
+      "Bash(python demo_semantic_to_tilemap.py)",
+      "Bash(node demoSemanticToTilemap.js)",
+      "Bash(python demo_reachability.py)",
+      "Bash(node demoReachability.js)",
+      "Bash(python demo_level_generator.py)",
+      "Bash(node demoLevelGenerator.js)",
+      "Bash(python demo_refine_region.py)",
+      "Bash(node --input-type=module --eval \"import ''./demoRegionRefiner.js''\")",
+      "Bash(node demoRegionRefiner.js)"
     ]
   }
 }
