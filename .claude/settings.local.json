@@ -34,7 +34,15 @@
       "Bash(node demoLevelGenerator.js)",
       "Bash(python demo_refine_region.py)",
       "Bash(node --input-type=module --eval \"import ''./demoRegionRefiner.js''\")",
-      "Bash(node demoRegionRefiner.js)"
+      "Bash(node demoRegionRefiner.js)",
+      "Bash(python -c \"import anthropic; print\\(''ok''\\)\")",
+      "Bash(python -m pip install anthropic)",
+      "Bash(python -c \"import anthropic; print\\(anthropic.__version__\\)\")",
+      "Bash(python -c \"import google.generativeai; print\\(''gemini ok''\\)\")",
+      "Bash(python -c \"import openai; print\\(''openai ok''\\)\")",
+      "Bash(python -m pip install \"google-generativeai>=0.8.0\")",
+      "Bash(python -c \"import google.generativeai; print\\(''gemini'', google.generativeai.__version__\\)\")",
+      "Bash(python -c \"import openai; print\\(''openai'', openai.__version__\\)\")"
     ]
   }
 }

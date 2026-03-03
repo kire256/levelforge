@@ -11,6 +11,10 @@
   pointer-events: none;
 }
 
+.tilemap-canvas-container.transparent {
+  background: transparent;
+}
+
 .tilemap-canvas-container.non-interactive .canvas-controls,
 .tilemap-canvas-container.non-interactive .tile-coords {
   display: none;

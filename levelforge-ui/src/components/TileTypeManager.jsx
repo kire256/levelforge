@@ -6,6 +6,7 @@ const COLLISION_TYPES = [
   { id: 'none', label: 'None', description: 'No collision' },
   { id: 'solid', label: 'Solid', description: 'Blocks movement' },
   { id: 'passthrough', label: 'Passthrough', description: 'Can jump through from below' },
+  { id: 'ladder', label: 'Ladder', description: 'Climbable vertical surface' },
   { id: 'hazard', label: 'Hazard', description: 'Deals damage on contact' },
   { id: 'water', label: 'Water', description: 'Swimmable fluid' },
 ]

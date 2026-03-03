@@ -39,9 +39,9 @@ from collections import deque
 from dataclasses import dataclass, field
 from typing import Optional
 
-from semantic_grid import Cell, SemanticGrid32
-from reachability import PlayerConfig, ReachabilityReport, ReachabilityValidator
-from level_generator import (
+from .semantic_grid import Cell, SemanticGrid32
+from .reachability import PlayerConfig, ReachabilityReport, ReachabilityValidator
+from .level_generator import (
     Foothold, MovementSpec, GeneratorKnobs,
     PLAYER_HEIGHT, MAX_STEP_TRIES,
     _clearance_ok, _min_dx_for_progress,

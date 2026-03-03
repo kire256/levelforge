@@ -20,6 +20,7 @@ export default function TilemapCanvas({
   snapToGrid = false,
   onTileChange,
   interactive = true,
+  transparent = false,
   externalZoom,
   externalPan,
   onZoomChange,
@@ -263,9 +264,13 @@ export default function TilemapCanvas({
     const canvasW = canvasSize.width
     const canvasH = canvasSize.height
     
-    // Clear canvas with dark background (this is the base layer)
-    ctx.fillStyle = '#1a1a2e'
-    ctx.fillRect(0, 0, canvasW, canvasH)
+    // Clear canvas — transparent for overlay layers, dark background for the base layer
+    if (transparent) {
+      ctx.clearRect(0, 0, canvasW, canvasH)
+    } else {
+      ctx.fillStyle = '#1a1a2e'
+      ctx.fillRect(0, 0, canvasW, canvasH)
+    }
     
     const scaledTileSize = tileSize * zoom
     
@@ -361,7 +366,7 @@ export default function TilemapCanvas({
     ctx.fillStyle = '#fff'
     ctx.font = '12px monospace'
     ctx.fillText(`Size: ${width}x${height}`, 14, 24)
-  }, [data, tileTypeLookup, tileSize, zoom, pan, showGrid, currentTile, isPanning, tool, isDrawing, drawStart, selectedTileId, width, height, canvasSize, interactive])
+  }, [data, tileTypeLookup, tileSize, zoom, pan, showGrid, currentTile, isPanning, tool, isDrawing, drawStart, selectedTileId, width, height, canvasSize, interactive, transparent])
   
   // Trigger render on changes
   useEffect(() => {
@@ -399,7 +404,7 @@ export default function TilemapCanvas({
   }
   
   return (
-    <div ref={containerRef} className={`tilemap-canvas-container ${!interactive ? 'non-interactive' : ''}`}>
+    <div ref={containerRef} className={`tilemap-canvas-container ${!interactive ? 'non-interactive' : ''} ${transparent ? 'transparent' : ''}`}>
       {/* Controls */}
       <div className="canvas-controls">
         <button onClick={handleZoomOut} title="Zoom Out">➖</button>

@@ -5,15 +5,17 @@ LevelForge FastAPI backend.
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, List
 import json
 import logging
 import asyncio
+import random
 import sse_starlette.sse as sse
 
 from levelforge.src.core.generation.generator import LevelGenerator, create_generator
 from levelforge.src.ai.clients.llm_client import LLMFactory
+from levelforge.src.core.grid import MovementSpec, GeneratorKnobs, generate_level
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -42,10 +44,8 @@ def get_generator() -> LevelGenerator:
     global _generator, _current_model
     if _generator is None:
         try:
-            import database as db
             _current_model = _current_model or "llama3.2:latest"
-            ollama_url = db.get_app_setting("ollama_url") or "http://192.168.68.76:11434"
-            _generator = create_generator(client_type="ollama", model=_current_model, base_url=ollama_url)
+            _generator = create_generator(client_type="ollama", model=_current_model, base_url=_get_ollama_url())
             logger.info(f"Level generator initialized with model {_current_model}")
         except Exception as e:
             logger.error(f"Failed to initialize generator: {e}")
@@ -54,15 +54,25 @@ def get_generator() -> LevelGenerator:
 
 
 # Request models
-class GenerationRequest(BaseModel):
-    genre: str = "platformer"
-    difficulty: str = "medium"
-    level_type: str = "linear"
-    theme: str = "default"
-    requirements: str = ""
-    abilities: Optional[List[str]] = None
-    model: Optional[str] = None  # Optional model override
-    project_id: Optional[int] = None  # For custom entity types
+
+class LevelPlanRequest(BaseModel):
+    """Structured knobs for the procedural level generator."""
+    seed: Optional[int] = None              # None = random each time
+    difficulty: float = 0.5                 # 0.0–1.0
+    verticality: float = 0.3                # 0.0–1.0
+    hazard_density: float = 0.1             # 0.0–1.0
+    target_foothold_count: int = 8          # 4–16
+    allow_ladders: bool = False
+    style_tags: List[str] = []
+    level_name: Optional[str] = None
+    model: Optional[str] = None
+    project_id: Optional[int] = None
+
+
+class InterpretRequest(BaseModel):
+    """Natural-language description to parse into a LevelPlanRequest."""
+    description: str
+    model: Optional[str] = None
 
 
 class RefinementRequest(BaseModel):
@@ -376,319 +386,174 @@ def recreate_generator(model: str) -> LevelGenerator:
     return _generator
 
 
-@app.post("/api/generate")
-async def generate_level(request: GenerationRequest):
-    """Generate a new level."""
+def _complete_json(raw: str) -> str:
+    """Close any unclosed JSON brackets/braces in a truncated LLM response."""
+    stack = []
+    in_string = False
+    escape = False
+    for ch in raw:
+        if escape:
+            escape = False
+        elif ch == '\\' and in_string:
+            escape = True
+        elif ch == '"':
+            in_string = not in_string
+        elif not in_string:
+            if ch in ('{', '['):
+                stack.append('}' if ch == '{' else ']')
+            elif ch in ('}', ']') and stack:
+                stack.pop()
+    return raw + ''.join(reversed(stack))
+
+
+@app.post("/api/interpret-level-plan")
+async def interpret_level_plan(request: InterpretRequest):
+    """Use the active LLM to parse a natural-language description into LevelPlan knobs."""
+    from levelforge.src.ai.prompts.templates import get_level_plan_prompt
+
+    if request.model and request.model != _current_model:
+        recreate_generator(request.model)
+
+    generator = get_generator()
+    system, user = get_level_plan_prompt(request.description)
+
     try:
-        # Switch model if requested
-        if request.model and request.model != _current_model:
-            generator = recreate_generator(request.model)
-        else:
-            generator = get_generator()
-        
-        # Fetch custom entity types if project_id provided
-        custom_entities_info = ""
-        if request.project_id:
-            import database as db
-            entity_types = db.get_entity_types(request.project_id)
-            if entity_types:
-                custom_entities_info = "\n\nCustom entity types for this project:\n"
-                for et in entity_types:
-                    rules = f" - Placement: {et['placement_rules']}" if et.get('placement_rules') else ""
-                    behavior = f" - Behavior: {et['behavior']}" if et.get('behavior') else ""
-                    
-                    # Parse and include metadata fields
-                    metadata_info = ""
-                    try:
-                        fields = json.loads(et.get('metadata_fields', '[]'))
-                        if fields:
-                            metadata_info = " - Metadata fields:"
-                            for field in fields:
-                                metadata_info += f"\n    * {field.get('name', 'unknown')} ({field.get('type', 'text')}): {field.get('description', '')} [default: {field.get('default', '')}]"
-                    except:
-                        pass
-                    
-                    custom_entities_info += f"- {et['emoji']} {et['name']} ({et['collision_type']}): {et.get('description', '')}{rules}{behavior}{metadata_info}\n"
-        
-        logger.info(f"Generating {request.genre} level, difficulty: {request.difficulty}")
-        
-        # Add custom entities to requirements
-        full_requirements = request.requirements or "Create an engaging level"
-        if custom_entities_info:
-            full_requirements += custom_entities_info
-        
-        # Generate based on genre
-        if request.genre == "platformer":
-            if request.level_type == "metroidvania":
-                result = generator.generate_metroidvania(
-                    difficulty=request.difficulty,
-                    abilities=request.abilities or ["double_jump", "dash"],
-                    theme=request.theme
-                )
-            else:
-                result = generator.generate_platformer(
-                    difficulty=request.difficulty,
-                    requirements=full_requirements,
-                    theme=request.theme
-                )
-        elif request.genre == "puzzle":
-            result = generator.generate_puzzle(
-                difficulty=request.difficulty,
-                requirements=full_requirements
-            )
-        elif request.genre == "shooter":
-            result = generator.generate_shooter(
-                difficulty=request.difficulty,
-                requirements=full_requirements
-            )
-        else:
-            raise HTTPException(status_code=400, detail=f"Unsupported genre: {request.genre}")
-        
-        if result.success:
-            return {
-                "success": True,
-                "level": result.level.model_dump()
-            }
-        else:
-            raise HTTPException(status_code=500, detail=result.error or "Generation failed")
-            
-    except HTTPException:
-        raise
+        raw = generator.client.generate_with_system(system, user, model=generator.model)
     except Exception as e:
-        logger.error(f"Generation error: {e}")
-        error_str = str(e)
-        # Translate common Chinese error messages
-        if "令牌已过期" in error_str or "401" in error_str:
-            error_detail = f"API authentication failed. Please check your {_current_provider} API key."
-        elif "rate limit" in error_str.lower():
-            error_detail = f"Rate limit exceeded. Please wait and try again."
-        else:
-            error_detail = f"Generation failed using {_current_provider}:{_current_model} - {error_str}"
-        raise HTTPException(status_code=500, detail=error_detail)
+        raise HTTPException(status_code=500, detail=f"LLM call failed: {e}")
 
+    # Strip any accidental markdown fences
+    raw = raw.strip()
+    if raw.startswith("```"):
+        raw = raw.split("```")[1]
+        if raw.startswith("json"):
+            raw = raw[4:]
+        raw = raw.rstrip("`").strip()
 
-def is_rate_limit_error(error_str: str) -> bool:
-    """Check if an error is a rate limit or quota error."""
-    error_lower = error_str.lower()
-    return any(x in error_lower for x in [
-        "rate limit", "quota", "429", "too many requests", 
-        "limit exceeded", "requests per", "usage limit"
-    ])
-
-
-def generate_with_fallback(generator, genre, level_type, difficulty, full_requirements, theme, abilities, custom_entities=None):
-    """Try generation with current model, fall back to Ollama on rate limits."""
-    global _generator, _current_model, _current_provider
-    
     try:
-        # Try primary model
-        if genre == "platformer":
-            if level_type == "metroidvania":
-                return generator.generate_metroidvania(
-                    difficulty=difficulty,
-                    abilities=abilities or ["double_jump", "dash"],
-                    theme=theme
-                )
-            else:
-                return generator.generate_platformer(
-                    difficulty=difficulty,
-                    requirements=full_requirements,
-                    theme=theme,
-                    custom_entities=custom_entities
-                )
-        elif genre == "puzzle":
-            return generator.generate_puzzle(
-                difficulty=difficulty,
-                requirements=full_requirements
-            )
-        elif genre == "shooter":
-            return generator.generate_shooter(
-                difficulty=difficulty,
-                requirements=full_requirements
-            )
-    except Exception as e:
-        error_str = str(e)
-        # If rate limit, try fallback to Ollama
-        if is_rate_limit_error(error_str) and _current_provider != "ollama":
-            logger.warning(f"Rate limit hit, falling back to Ollama: {error_str}")
-            try:
-                fallback_generator = create_generator(
-                    client_type="ollama",
-                    model="llama3.2:latest",
-                    base_url=_get_ollama_url()
-                )
-                if genre == "platformer":
-                    if level_type == "metroidvania":
-                        return fallback_generator.generate_metroidvania(
-                            difficulty=difficulty,
-                            abilities=abilities or ["double_jump", "dash"],
-                            theme=theme
-                        )
-                    else:
-                        return fallback_generator.generate_platformer(
-                            difficulty=difficulty,
-                            requirements=full_requirements,
-                            theme=theme,
-                            custom_entities=custom_entities
-                        )
-                elif genre == "puzzle":
-                    return fallback_generator.generate_puzzle(
-                        difficulty=difficulty,
-                        requirements=full_requirements
-                    )
-                elif genre == "shooter":
-                    return fallback_generator.generate_shooter(
-                        difficulty=difficulty,
-                        requirements=full_requirements
-                    )
-            except Exception as fallback_error:
-                logger.error(f"Fallback also failed: {fallback_error}")
-                raise fallback_error
-        else:
-            raise e
-
-
-async def generate_level_events(request: GenerationRequest):
-    """Generate a level with SSE progress events."""
-    try:
-        # Switch model if requested
-        if request.model and request.model != _current_model:
-            generator = recreate_generator(request.model)
-        else:
-            generator = get_generator()
-        
-        # Fetch custom entity types if project_id provided
-        custom_entities = None
-        custom_entities_info = ""
-        if request.project_id:
-            import database as db
-            entity_types = db.get_entity_types(request.project_id)
-            if entity_types:
-                custom_entities = entity_types
-                custom_entities_info = "\n\nUsing custom entity types from this project."
-        
-        # Send "preparing" step
-        yield f"data: {json.dumps({'event': 'progress', 'step': 'preparing', 'message': 'Preparing prompt...', 'progress': 10})}\n\n"
-        await asyncio.sleep(0.1)
-        
-        # Add custom entities to requirements
-        full_requirements = request.requirements or "Create an engaging level"
-        
-        # Check for supported genre
-        if request.genre not in ["platformer", "puzzle", "shooter"]:
-            yield f"data: {json.dumps({'event': 'error', 'message': f'Unsupported genre: {request.genre}'})}\n\n"
-            return
-        
-        # Send "generating" step
-        yield f"data: {json.dumps({'event': 'progress', 'step': 'generating', 'message': f'AI is generating level ({_current_provider}:{_current_model})...', 'progress': 40})}\n\n"
-        await asyncio.sleep(0.1)
-        
-        # Generate with automatic fallback to Ollama
+        plan = json.loads(raw)
+    except json.JSONDecodeError:
+        # Truncated response — try closing any unclosed brackets/braces
         try:
-            result = generate_with_fallback(
-                generator=generator,
-                genre=request.genre,
-                level_type=request.level_type,
-                difficulty=request.difficulty,
-                full_requirements=full_requirements,
-                theme=request.theme,
-                abilities=request.abilities,
-                custom_entities=custom_entities
-            )
-        except Exception as gen_error:
-            if is_rate_limit_error(str(gen_error)):
-                yield f"data: {json.dumps({'event': 'progress', 'step': 'fallback', 'message': 'Rate limit hit, falling back to Ollama...', 'progress': 45})}\n\n"
-                await asyncio.sleep(0.1)
-                # Retry the whole generation with Ollama
-                generator = create_generator(client_type="ollama", model="llama3.2:latest", base_url=_get_ollama_url())
-                result = generate_with_fallback(
-                    generator=generator,
-                    genre=request.genre,
-                    level_type=request.level_type,
-                    difficulty=request.difficulty,
-                    full_requirements=full_requirements,
-                    theme=request.theme,
-                    abilities=request.abilities,
-                    custom_entities=custom_entities
+            plan = json.loads(_complete_json(raw))
+        except json.JSONDecodeError as e:
+            raise HTTPException(status_code=422, detail=f"LLM did not return valid JSON: {e}\nRaw: {raw[:200]}")
+
+    # Clamp and validate numeric fields
+    plan["difficulty"]    = max(0.0, min(1.0, float(plan.get("difficulty",    0.5))))
+    plan["verticality"]   = max(0.0, min(1.0, float(plan.get("verticality",   0.3))))
+    plan["hazard_density"] = max(0.0, min(1.0, float(plan.get("hazard_density", 0.1))))
+    plan["target_foothold_count"] = max(4, min(16, int(plan.get("target_foothold_count", 8))))
+    plan["allow_ladders"] = bool(plan.get("allow_ladders", False))
+    plan["style_tags"]    = [str(t).lower() for t in plan.get("style_tags", [])][:8]
+    if "seed" not in plan or plan["seed"] is None:
+        plan["seed"] = random.randint(0, 2**31)
+    else:
+        plan["seed"] = max(0, int(plan["seed"]))
+
+    return plan
+
+
+def _run_procedural_generation(request: LevelPlanRequest) -> dict:
+    """Build knobs, run the procedural generator, and return serialised level_data."""
+    seed = request.seed if request.seed is not None else random.randint(0, 2**31)
+
+    # Harder difficulty → narrower footholds (less room for error)
+    inv = 1.0 - request.difficulty
+    knobs = GeneratorKnobs(
+        target_foothold_count=request.target_foothold_count,
+        min_foothold_width=max(2, 2 + round(inv * 2)),   # 2–4
+        max_foothold_width=max(3, 3 + round(inv * 2)),   # 3–5 (reduced to avoid clearance conflicts)
+        verticality=request.verticality,
+        difficulty=request.difficulty,
+        allow_ladders=request.allow_ladders,
+    )
+    # More footholds need a larger horizontal jump budget so the last step
+    # can always reach GOAL_X_MIN even when early steps consumed more x-space.
+    jump_dist = 6 if request.target_foothold_count >= 10 else 5
+    spec = MovementSpec(max_jump_height=4, max_jump_distance=jump_dist, max_safe_drop=6)
+
+    result = generate_level(seed, knobs, spec)
+
+    plan_dict = {
+        "seed": seed,
+        "difficulty": request.difficulty,
+        "verticality": request.verticality,
+        "hazard_density": request.hazard_density,
+        "target_foothold_count": request.target_foothold_count,
+        "allow_ladders": request.allow_ladders,
+        "style_tags": request.style_tags,
+    }
+
+    return {
+        "version": "2.0",
+        "kind": "procedural",
+        "level_plan": plan_dict,
+        "semantic_grid": result.grid.toJSON(),
+        "footholds": [{"x": fh.x, "y": fh.y, "width": fh.width} for fh in result.footholds],
+        "seed_used": result.seed_used,
+        "attempts": result.attempts,
+    }
+
+
+async def generate_level_events(request: LevelPlanRequest):
+    """Generate a level with SSE progress events (procedural generator)."""
+    try:
+        yield f"data: {json.dumps({'event': 'progress', 'step': 'preparing', 'message': 'Building generation knobs...', 'progress': 20})}\n\n"
+        await asyncio.sleep(0.05)
+
+        yield f"data: {json.dumps({'event': 'progress', 'step': 'generating', 'message': 'Running procedural generator...', 'progress': 50})}\n\n"
+        await asyncio.sleep(0.05)
+
+        level_data = _run_procedural_generation(request)
+
+        yield f"data: {json.dumps({'event': 'progress', 'step': 'saving', 'message': 'Saving level...', 'progress': 85})}\n\n"
+        await asyncio.sleep(0.05)
+
+        level_response = {"level_data": json.dumps(level_data)}
+
+        if request.project_id:
+            try:
+                import database as db
+                tags_str  = ", ".join(request.style_tags) if request.style_tags else "generated"
+                level_name = request.level_name or f"Procedural Level ({tags_str}, d={request.difficulty:.2f})"
+                level_id = db.create_level(
+                    project_id=request.project_id,
+                    name=level_name,
+                    genre="platformer",
+                    difficulty=str(round(request.difficulty, 2)),
+                    level_type="grid",
+                    theme=tags_str,
+                    level_data=json.dumps(level_data),
                 )
-            else:
-                raise gen_error
-        
-        # Send "parsing" step  
-        yield f"data: {json.dumps({'event': 'progress', 'step': 'parsing', 'message': 'Parsing AI response...', 'progress': 70})}\n\n"
-        await asyncio.sleep(0.1)
-        
-        # Send "validating" step
-        yield f"data: {json.dumps({'event': 'progress', 'step': 'validating', 'message': 'Validating level data...', 'progress': 85})}\n\n"
-        await asyncio.sleep(0.1)
-        
-        if result.success:
-            level_response = result.level.model_dump()
-            
-            # Save the level to the database if project_id is provided
-            if request.project_id:
-                try:
-                    import database as db
-                    level_id = db.create_level(
-                        project_id=request.project_id,
-                        name=f"{request.theme.title()} {request.genre.capitalize()} - {request.difficulty.title()}",
-                        genre=request.genre,
-                        difficulty=request.difficulty,
-                        level_type=request.level_type,
-                        theme=request.theme,
-                        level_data=json.dumps(result.level.model_dump())
-                    )
-                    logger.info(f"Level saved to database with ID: {level_id}")
-                    
-                    # Fetch the complete level from DB to return
-                    levels = db.get_levels(request.project_id)
-                    saved_level = next((l for l in levels if l[0] == level_id), None)
-                    
-                    if saved_level:
-                        level_response = {
-                            "id": saved_level[0],
-                            "name": saved_level[1],
-                            "genre": saved_level[2],
-                            "difficulty": saved_level[3],
-                            "level_type": saved_level[4],
-                            "theme": saved_level[5],
-                            "level_data": saved_level[6],
-                            "version": saved_level[7],
-                            "created_at": saved_level[8],
-                            "updated_at": saved_level[9]
-                        }
-                    else:
-                        level_response["id"] = level_id
-                        
-                except Exception as save_error:
-                    logger.error(f"Failed to save level: {save_error}")
-                    # Still return success, just won't have DB ID
-            
-            yield f"data: {json.dumps({'event': 'progress', 'step': 'complete', 'message': 'Level generated successfully!', 'progress': 100})}\n\n"
-            await asyncio.sleep(0.1)
-            
-            yield f"data: {json.dumps({'event': 'result', 'success': True, 'level': level_response})}\n\n"
-        else:
-            yield f"data: {json.dumps({'event': 'error', 'message': result.error or 'Generation failed'})}\n\n"
-            
-    except HTTPException:
-        raise
+                logger.info(f"Procedural level saved with ID: {level_id}")
+
+                levels = db.get_levels(request.project_id)
+                saved = next((l for l in levels if l[0] == level_id), None)
+                if saved:
+                    level_response = {
+                        "id": saved[0], "name": saved[1], "genre": saved[2],
+                        "difficulty": saved[3], "level_type": saved[4], "theme": saved[5],
+                        "level_data": saved[6], "version": saved[7],
+                        "created_at": saved[8], "updated_at": saved[9],
+                    }
+                else:
+                    level_response["id"] = level_id
+            except Exception as save_err:
+                logger.error(f"Failed to save level: {save_err}")
+
+        yield f"data: {json.dumps({'event': 'progress', 'step': 'complete', 'message': 'Level generated successfully!', 'progress': 100})}\n\n"
+        await asyncio.sleep(0.05)
+        yield f"data: {json.dumps({'event': 'result', 'success': True, 'level': level_response})}\n\n"
+
     except Exception as e:
         logger.error(f"Generation error: {e}")
-        error_str = str(e)
-        if "令牌已过期" in error_str or "401" in error_str:
-            error_detail = f"API authentication failed. Please check your {_current_provider} API key."
-        elif "rate limit" in error_str.lower():
-            error_detail = f"Rate limit exceeded. Please wait and try again."
-        else:
-            error_detail = f"Generation failed using {_current_provider}:{_current_model} - {error_str}"
-        
-        yield f"data: {json.dumps({'event': 'error', 'message': error_detail})}\n\n"
+        yield f"data: {json.dumps({'event': 'error', 'message': str(e)})}\n\n"
 
 
 @app.post("/api/generate/stream")
-async def generate_level_stream(request: GenerationRequest):
-    """Generate a new level with streaming progress events."""
+async def generate_level_stream(request: LevelPlanRequest):
+    """Generate a new procedural level with streaming progress events."""
     return StreamingResponse(
         generate_level_events(request),
         media_type="text/event-stream",
@@ -867,22 +732,22 @@ class CreateEntityTypeRequest(BaseModel):
     name: str
     emoji: str = '📦'
     color: str = '#6366f1'
-    description: str = None
-    placement_rules: str = None
-    behavior: str = None
+    description: Optional[str] = None
+    placement_rules: Optional[str] = None
+    behavior: Optional[str] = None
     collision_type: str = 'neutral'
     metadata_fields: str = '[]'  # JSON array of field definitions
 
 
 class UpdateEntityTypeRequest(BaseModel):
-    name: str = None
-    emoji: str = None
-    color: str = None
-    description: str = None
-    placement_rules: str = None
-    behavior: str = None
-    collision_type: str = None
-    metadata_fields: str = None
+    name: Optional[str] = None
+    emoji: Optional[str] = None
+    color: Optional[str] = None
+    description: Optional[str] = None
+    placement_rules: Optional[str] = None
+    behavior: Optional[str] = None
+    collision_type: Optional[str] = None
+    metadata_fields: Optional[str] = None
 
 
 @app.post("/api/projects/{project_id}/entity-types")
@@ -959,7 +824,7 @@ async def delete_entity_type(entity_type_id: int):
 class CreateTileTypeRequest(BaseModel):
     name: str
     color: str = '#808080'
-    description: str = None
+    description: Optional[str] = None
     collision_type: str = 'solid'
     friction: float = 1.0
     damage: int = 0
@@ -968,14 +833,14 @@ class CreateTileTypeRequest(BaseModel):
 
 
 class UpdateTileTypeRequest(BaseModel):
-    name: str = None
-    color: str = None
-    description: str = None
-    collision_type: str = None
-    friction: float = None
-    damage: int = None
-    category: str = None
-    metadata: str = None
+    name: Optional[str] = None
+    color: Optional[str] = None
+    description: Optional[str] = None
+    collision_type: Optional[str] = None
+    friction: Optional[float] = None
+    damage: Optional[int] = None
+    category: Optional[str] = None
+    metadata: Optional[str] = None
 
 
 class UpdateTileSizeRequest(BaseModel):

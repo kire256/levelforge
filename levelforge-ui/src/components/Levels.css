@@ -532,6 +532,45 @@
 .generate-btn:hover { background: var(--accent-hover); }
 .generate-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
+/* Dual-mode generation form extras */
+.label-hint  { font-weight: 400; opacity: 0.6; font-size: 0.78rem; margin-left: 6px; }
+.knob-value  { font-weight: 600; color: var(--accent); margin-left: 6px; }
+
+.interpret-btn {
+  align-self: flex-end;
+  padding: 8px 18px;
+  font-size: 0.85rem;
+}
+
+.form-divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 4px 0 8px;
+}
+
+.form-row-inline { display: flex; gap: 16px; }
+.form-row-inline .form-group.half { flex: 1; max-width: none; }
+
+.form-group-checkbox { justify-content: flex-end; }
+.form-group-checkbox label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: var(--text-primary);
+}
+.form-group-checkbox input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; }
+
+.form-group input[type="range"] { padding: 0; background: transparent; border: none; cursor: pointer; }
+.range-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.72rem;
+  opacity: 0.5;
+  margin-top: -6px;
+}
+
 .diff-badge {
   padding: 3px 10px;
   border-radius: 12px;
@@ -796,9 +835,10 @@
   text-transform: capitalize;
 }
 
-/* Layered Canvas - both layers visible */
+/* Layered Canvas - all layers stacked */
 .layered-canvas {
   position: relative;
+  background: #1a1a2e; /* canvas background — individual layers are transparent */
 }
 
 .canvas-layer {
@@ -815,6 +855,10 @@
   z-index: 1;
 }
 
-.entities-layer {
+.ladders-layer {
   z-index: 2;
+}
+
+.entities-layer {
+  z-index: 3;
 }

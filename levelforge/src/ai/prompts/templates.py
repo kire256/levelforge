@@ -326,3 +326,81 @@ def get_refine_prompt(
     if modification_type == "harder":
         return REFINE_MAKE_HARDER
     return REFINE_ADD_PLATFORMS
+
+
+# ---------------------------------------------------------------------------
+# Procedural-generation schemas (for LLM → structured knobs)
+# ---------------------------------------------------------------------------
+
+_LEVEL_PLAN_SCHEMA = """\
+{
+  "seed": <integer ≥ 0>,
+  "difficulty": <float 0.0–1.0>,
+  "verticality": <float 0.0–1.0>,
+  "hazard_density": <float 0.0–1.0>,
+  "target_foothold_count": <integer 4–16>,
+  "allow_ladders": <boolean>,
+  "style_tags": [<lowercase strings, max 8 items>]
+}"""
+
+_REFINE_REQUEST_SCHEMA = """\
+{
+  "rect": {"x": <int 0–31>, "y": <int 0–31>, "w": <int 1–32>, "h": <int 1–32>},
+  "difficulty_delta": <float -1.0–1.0>,
+  "verticality_delta": <float -1.0–1.0>,
+  "add_secret": <boolean>,
+  "smooth_silhouette": <boolean>,
+  "keep_main_path_stable": <boolean>
+}"""
+
+
+def get_level_plan_prompt(description: str) -> tuple[str, str]:
+    """Return (system, user) that forces the LLM to output a LevelPlan JSON object.
+
+    The LLM interprets a natural-language description and returns structured
+    generation knobs for the procedural level generator.
+    """
+    system = f"""You are a level-design assistant for a 2-D tile platformer.
+Output ONLY a single JSON object — no prose, no markdown fences, no comments.
+All fields listed in the schema are REQUIRED.
+
+Schema:
+{_LEVEL_PLAN_SCHEMA}
+
+Field guidance:
+- seed: any non-negative integer; vary it to introduce novelty
+- difficulty: 0.0 = trivial gaps, 1.0 = pixel-perfect expert jumps
+- verticality: 0.0 = flat layout, 1.0 = steep tower
+- hazard_density: fraction of open floor cells converted to spikes/lava (0=none)
+- target_foothold_count: 4 = short level, 16 = long level
+- allow_ladders: true adds vertical shortcut tiles between platforms
+- style_tags: lowercase thematic keywords, e.g. ["cave", "lava", "ruins"]"""
+    return system, description.strip()
+
+
+def get_refine_request_prompt(description: str, rect: dict | None = None) -> tuple[str, str]:
+    """Return (system, user) that forces the LLM to output a RefineRequest JSON object.
+
+    The LLM interprets a natural-language modification request and returns
+    structured parameters for the region-limited level refiner.
+    """
+    rect_hint = ""
+    if rect:
+        rect_hint = (
+            f"\nThe region to modify is already selected: "
+            f"x={rect['x']}, y={rect['y']}, w={rect['w']}, h={rect['h']}."
+        )
+    system = f"""You are a level-design assistant for a 2-D tile platformer.
+Output ONLY a single JSON object — no prose, no markdown fences, no comments.
+All fields listed in the schema are REQUIRED.
+
+Schema:
+{_REFINE_REQUEST_SCHEMA}
+
+Field guidance:
+- rect: rectangle to regenerate within the 32×32 grid (y=0 is the top row)
+  If the user mentions a vague region use sensible defaults, e.g. x=8,y=4,w=16,h=20
+- difficulty_delta: +0.25 = noticeably harder, 0 = unchanged, −0.25 = easier
+- keep_main_path_stable: true preserves entry/exit seam tiles (use true unless
+  the user explicitly wants a new route through the region)"""
+    return system, description.strip() + rect_hint

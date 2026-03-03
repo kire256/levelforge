@@ -1,27 +1,16 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import LevelView from './LevelView'
-import EntityRequirements from './EntityRequirements'
 import TilemapCanvas, { TOOLS } from './TilemapCanvas'
 import './Levels.css'
 import { API_BASE } from '../utils/api'
-
-const GENRES = [
-  { id: 'platformer', name: 'Platformer', icon: '🎮' },
-  { id: 'puzzle', name: 'Puzzle', icon: '🧩' },
-  { id: 'shooter', name: 'Shooter', icon: '🔫' },
-]
-
-const DIFFICULTIES = [
-  { id: 'easy', name: 'Easy', color: '#4ade80' },
-  { id: 'medium', name: 'Medium', color: '#facc15' },
-  { id: 'hard', name: 'Hard', color: '#f97316' },
-  { id: 'expert', name: 'Expert', color: '#ef4444' },
-]
+import { SemanticGrid32, Cell } from '../models/semanticGrid.js'
+import { SemanticToTilemap, TileIds } from '../models/semanticToTilemap.js'
 
 // Layer types
 const LAYERS = {
   ENTITIES: 'entities',
   TILEMAP: 'tilemap',
+  LADDERS: 'ladders',
 }
 
 export default function Levels({
@@ -30,6 +19,7 @@ export default function Levels({
   currentLevel,
   onSelectLevel,
   onGenerateLevel,
+  onInterpretDescription,
   generating,
   progress,
   progressMessage,
@@ -59,11 +49,16 @@ export default function Levels({
   const activeSelectedObject = selectedObject ?? localSelectedObject
   const handleObjectSelect = onSelectObject || setLocalSelectedObject
 
-  const [genre, setGenre] = useState('platformer')
-  const [difficulty, setDifficulty] = useState('medium')
-  const [theme, setTheme] = useState('')
-  const [requirements, setRequirements] = useState('')
-  const [entityRequirements, setEntityRequirements] = useState([])
+  // Generation knobs (dual-mode: description ↔ sliders)
+  const [description, setDescription]               = useState('')
+  const [seed, setSeed]                             = useState('')
+  const [difficulty, setDifficulty]                 = useState(0.5)
+  const [verticality, setVerticality]               = useState(0.3)
+  const [hazardDensity, setHazardDensity]           = useState(0.1)
+  const [targetFootholdCount, setTargetFootholdCount] = useState(8)
+  const [allowLadders, setAllowLadders]             = useState(false)
+  const [styleTags, setStyleTags]                   = useState('')
+  const [interpreting, setInterpreting]             = useState(false)
   
   // Sidebar tab state
   const [sidebarTab, setSidebarTab] = useState('layers') // 'layers', 'levels', or 'objects'
@@ -72,6 +67,7 @@ export default function Levels({
   const [layerVisibility, setLayerVisibility] = useState({
     [LAYERS.ENTITIES]: true,
     [LAYERS.TILEMAP]: true,
+    [LAYERS.LADDERS]: true,
   })
   const [activeLayer, setActiveLayer] = useState(LAYERS.ENTITIES)
   
@@ -80,6 +76,8 @@ export default function Levels({
   const [selectedTileId, setSelectedTileId] = useState(null)
   const [selectedTool, setSelectedTool] = useState(TOOLS.PENCIL)
   const [tilemapData, setTilemapData] = useState(null)
+  const [ladderData, setLadderData] = useState(null)
+  const tilemapDirty = useRef(false) // true only after user edits a tile
   
   // Shared pan/zoom state for both layers
   const [sharedZoom, setSharedZoom] = useState(1)
@@ -171,15 +169,58 @@ export default function Levels({
   
   // Sync tilemap data only when the selected level changes (not when level data is updated in-place)
   useEffect(() => {
-    if (!currentLevel) return
+    tilemapDirty.current = false  // reset on every level switch — init must not trigger save
+    if (!currentLevel) { setLadderData(null); return }
     let levelData = null
     try {
       levelData = typeof currentLevel.level_data === 'string'
         ? JSON.parse(currentLevel.level_data)
         : currentLevel.level_data
     } catch {}
+
+    // Load ladder tilemap if it was saved separately
+    if (levelData?.ladder_tilemap) {
+      setLadderData(levelData.ladder_tilemap)
+    } else {
+      setLadderData(null)
+    }
+
     if (levelData?.tilemap) {
       setTilemapData(levelData.tilemap)
+    } else if (levelData?.semantic_grid) {
+      // Auto-convert semantic grid to a displayable tilemap.
+      // Ladders go to their own layer; pass ladder: 0 to the main tilemap.
+      try {
+        const grid = SemanticGrid32.fromJSON(levelData.semantic_grid)
+        const byCollision = (col) => tileTypes.find(t => t.collision_type === col)?.id ?? 0
+        const ladderTileId = byCollision('ladder')
+
+        // Main tilemap — ladder cells become empty
+        const tileIds = new TileIds({
+          solidBase: byCollision('solid'),
+          oneway:    byCollision('passthrough'),
+          hazard:    byCollision('hazard'),
+          ladder:    0,
+        })
+        const data = new SemanticToTilemap(tileIds).convert(grid)
+        setTilemapData({ width: SemanticGrid32.WIDTH, height: SemanticGrid32.HEIGHT, data })
+
+        // Ladder layer — only cells flagged LADDER
+        if (!levelData.ladder_tilemap) {
+          const ladderLayerData = Array.from({ length: SemanticGrid32.HEIGHT }, (_, y) =>
+            Array.from({ length: SemanticGrid32.WIDTH }, (_, x) =>
+              (grid.get(x, y) & Cell.LADDER) ? ladderTileId : null
+            )
+          )
+          const hasAnyLadder = ladderLayerData.some(row => row.some(c => c !== null))
+          if (hasAnyLadder) {
+            setLadderData({ width: SemanticGrid32.WIDTH, height: SemanticGrid32.HEIGHT, data: ladderLayerData })
+          }
+        }
+      } catch {
+        setTilemapData({ width: SemanticGrid32.WIDTH, height: SemanticGrid32.HEIGHT,
+          data: Array(SemanticGrid32.HEIGHT).fill(null).map(() => Array(SemanticGrid32.WIDTH).fill(null)) })
+      }
     } else {
       setTilemapData({
         width: 50,
@@ -222,6 +263,7 @@ export default function Levels({
   
   // Tile change handler — updates local state; debounced save via useEffect below
   const handleTileChange = useCallback((x, y, tileId) => {
+    tilemapDirty.current = true  // mark as user-edited so the debounced save fires
     setTilemapData(prev => {
       if (!prev) return prev
       const newData = prev.data.map(row => [...row])
@@ -232,16 +274,28 @@ export default function Levels({
     })
   }, [])
 
-  // Debounced tilemap save: notify parent 500ms after last tile change
+  // Ladder tile change handler — same pattern but for the ladder layer
+  const handleLadderTileChange = useCallback((x, y, tileId) => {
+    tilemapDirty.current = true
+    setLadderData(prev => {
+      const base = prev || { width: SemanticGrid32.WIDTH, height: SemanticGrid32.HEIGHT,
+        data: Array(SemanticGrid32.HEIGHT).fill(null).map(() => Array(SemanticGrid32.WIDTH).fill(null)) }
+      const newData = base.data.map(row => [...row])
+      if (newData[y]) newData[y][x] = tileId
+      return { ...base, data: newData }
+    })
+  }, [])
+
+  // Debounced tilemap save: notify parent 500ms after last tile change (only if user edited)
   const tilemapSaveTimer = useRef(null)
   useEffect(() => {
-    if (!tilemapData || !currentLevel || !onTilemapChange) return
+    if (!tilemapData || !currentLevel || !onTilemapChange || !tilemapDirty.current) return
     clearTimeout(tilemapSaveTimer.current)
     tilemapSaveTimer.current = setTimeout(() => {
-      onTilemapChange(tilemapData)
+      onTilemapChange(tilemapData, ladderData)
     }, 500)
     return () => clearTimeout(tilemapSaveTimer.current)
-  }, [tilemapData])
+  }, [tilemapData, ladderData])
   
   // Shared pan/zoom handlers
   const handleSharedZoomChange = useCallback((newZoom) => {
@@ -265,48 +319,31 @@ export default function Levels({
   }, [])
 
   const handleGenerate = () => {
-    // Format entity requirements into prompt
-    let entityReqsText = ''
-    if (entityRequirements.length > 0) {
-      entityReqsText = '\n\nEntity Requirements:\n'
-      entityRequirements.forEach(req => {
-        if (req.entityType && req.count > 0) {
-          entityReqsText += `- ${req.count}x ${req.entityType.name}`
-          if (req.placement) {
-            entityReqsText += `: ${req.placement}`
-          }
-          entityReqsText += '\n'
-        }
-      })
-    }
-    
-    const fullRequirements = (requirements || 'Create an engaging level') + entityReqsText
-    
     onGenerateLevel({
-      genre,
+      seed: seed !== '' ? parseInt(seed, 10) : null,
       difficulty,
-      theme: theme || 'default',
-      requirements: fullRequirements
+      verticality,
+      hazard_density: hazardDensity,
+      target_foothold_count: targetFootholdCount,
+      allow_ladders: allowLadders,
+      style_tags: styleTags.split(',').map(s => s.trim()).filter(Boolean),
     })
   }
-  
-  const addEntityRequirement = () => {
-    setEntityRequirements([...entityRequirements, {
-      id: Date.now(),
-      entityType: null,
-      count: 1,
-      placement: ''
-    }])
-  }
-  
-  const removeEntityRequirement = (id) => {
-    setEntityRequirements(entityRequirements.filter(req => req.id !== id))
-  }
-  
-  const updateEntityRequirement = (id, field, value) => {
-    setEntityRequirements(entityRequirements.map(req => 
-      req.id === id ? { ...req, [field]: value } : req
-    ))
+
+  const handleInterpret = async () => {
+    if (!description.trim() || !onInterpretDescription) return
+    setInterpreting(true)
+    const plan = await onInterpretDescription(description)
+    if (plan) {
+      if (plan.difficulty          !== undefined) setDifficulty(plan.difficulty)
+      if (plan.verticality         !== undefined) setVerticality(plan.verticality)
+      if (plan.hazard_density      !== undefined) setHazardDensity(plan.hazard_density)
+      if (plan.target_foothold_count !== undefined) setTargetFootholdCount(plan.target_foothold_count)
+      if (plan.allow_ladders       !== undefined) setAllowLadders(plan.allow_ladders)
+      if (plan.style_tags          !== undefined) setStyleTags(plan.style_tags.join(', '))
+      if (plan.seed                !== undefined) setSeed(String(plan.seed))
+    }
+    setInterpreting(false)
   }
 
   if (!currentProject) {
@@ -497,12 +534,34 @@ export default function Levels({
                     )}
                   </div>
                   
+                  {/* Ladder Layer */}
+                  <div
+                    className={`layer-item ${activeLayer === LAYERS.LADDERS ? 'active' : ''}`}
+                    onClick={() => setActiveLayer(LAYERS.LADDERS)}
+                  >
+                    <button
+                      className="layer-visibility-btn"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setLayerVisibility(v => ({ ...v, [LAYERS.LADDERS]: !v[LAYERS.LADDERS] }))
+                      }}
+                      title={layerVisibility[LAYERS.LADDERS] ? 'Hide layer' : 'Show layer'}
+                    >
+                      {layerVisibility[LAYERS.LADDERS] ? '👁️' : '👁️‍🗨️'}
+                    </button>
+                    <span className="layer-icon">🪜</span>
+                    <span className="layer-name">Ladders</span>
+                    <span className="layer-count">
+                      {ladderData ? `${ladderData.width}x${ladderData.height}` : '—'}
+                    </span>
+                  </div>
+
                   {/* Tilemap Layer */}
-                  <div 
+                  <div
                     className={`layer-item ${activeLayer === LAYERS.TILEMAP ? 'active' : ''}`}
                     onClick={() => setActiveLayer(LAYERS.TILEMAP)}
                   >
-                    <button 
+                    <button
                       className="layer-visibility-btn"
                       onClick={(e) => {
                         e.stopPropagation()
@@ -520,8 +579,8 @@ export default function Levels({
                   </div>
                 </div>
                 
-                {/* Tilemap Settings (when tilemap layer is active) */}
-                {activeLayer === LAYERS.TILEMAP && currentLevel && (
+                {/* Tilemap Settings (when tilemap or ladder layer is active) */}
+                {(activeLayer === LAYERS.TILEMAP || activeLayer === LAYERS.LADDERS) && currentLevel && (
                   <div className="tilemap-settings">
                     <h4>Tilemap Settings</h4>
                     <div className="setting-row">
@@ -580,8 +639,8 @@ export default function Levels({
               <div className="canvas-area">
                 {currentLevel ? (
                   <>
-                    {/* Tile Tools Toolbar - appears when tilemap layer is active */}
-                    {activeLayer === LAYERS.TILEMAP && (
+                    {/* Tile Tools Toolbar - appears when tilemap or ladder layer is active */}
+                    {(activeLayer === LAYERS.TILEMAP || activeLayer === LAYERS.LADDERS) && (
                       <div className="tile-tools-toolbar">
                         <div className="toolbar-section tools-section">
                           <span className="toolbar-label">Tools:</span>
@@ -633,7 +692,10 @@ export default function Levels({
                           >
                             🚫
                           </button>
-                          {tileTypes.map(tile => (
+                          {(activeLayer === LAYERS.LADDERS
+                            ? tileTypes.filter(t => t.collision_type === 'ladder')
+                            : tileTypes
+                          ).map(tile => (
                             <button
                               key={tile.id}
                               className={`tile-swatch-btn ${selectedTileId === tile.id ? 'selected' : ''}`}
@@ -674,6 +736,7 @@ export default function Levels({
                             showGrid={showGrid && activeLayer === LAYERS.TILEMAP}
                             onTileChange={handleTileChange}
                             interactive={activeLayer === LAYERS.TILEMAP}
+                            transparent={true}
                             externalZoom={sharedZoom}
                             externalPan={sharedPan}
                             onZoomChange={handleSharedZoomChange}
@@ -682,6 +745,27 @@ export default function Levels({
                         </div>
                       )}
                       
+                      {/* Ladder Layer (renders above tilemap, below entities) */}
+                      {layerVisibility[LAYERS.LADDERS] && ladderData && (
+                        <div className={`canvas-layer ladders-layer ${activeLayer === LAYERS.LADDERS ? 'interactive' : ''}`}>
+                          <TilemapCanvas
+                            tilemap={ladderData}
+                            tileTypes={tileTypes.filter(t => t.collision_type === 'ladder')}
+                            selectedTileId={selectedTileId}
+                            tool={selectedTool}
+                            tileSize={currentProject?.tile_size || 32}
+                            showGrid={showGrid && activeLayer === LAYERS.LADDERS}
+                            onTileChange={handleLadderTileChange}
+                            interactive={activeLayer === LAYERS.LADDERS}
+                            transparent={true}
+                            externalZoom={sharedZoom}
+                            externalPan={sharedPan}
+                            onZoomChange={handleSharedZoomChange}
+                            onPanChange={handleSharedPanChange}
+                          />
+                        </div>
+                      )}
+
                       {/* Entities Layer (renders on top) */}
                       {layerVisibility[LAYERS.ENTITIES] && (
                         <div className={`canvas-layer entities-layer ${activeLayer === LAYERS.ENTITIES ? 'interactive' : ''}`}>
@@ -749,74 +833,90 @@ export default function Levels({
                 <div className="generation-form">
                   <div className="form-header">
                     <h2>🚀 Generate New Level</h2>
-                    <p>Configure your level settings and let AI create it for you.</p>
+                    <p>Describe what you want, or tune the knobs directly.</p>
                   </div>
 
+                  {/* Description + Interpret */}
                   <div className="form-row">
                     <div className="form-group">
-                      <label>Genre</label>
-                      <div className="genre-grid">
-                        {GENRES.map(g => (
-                          <button
-                            key={g.id}
-                            className={`genre-card ${genre === g.id ? 'active' : ''}`}
-                            onClick={() => setGenre(g.id)}
-                          >
-                            <span className="icon">{g.icon}</span>
-                            <span className="name">{g.name}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="form-row">
-                    <div className="form-group">
-                      <label>Difficulty</label>
-                      <div className="diff-grid">
-                        {DIFFICULTIES.map(d => (
-                          <button
-                            key={d.id}
-                            className={`diff-card ${difficulty === d.id ? 'active' : ''}`}
-                            style={{ '--active-color': d.color }}
-                            onClick={() => setDifficulty(d.id)}
-                          >
-                            {d.name}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="form-row">
-                    <div className="form-group half">
-                      <label>Theme</label>
-                      <input
-                        type="text"
-                        placeholder="e.g., forest, castle, space station..."
-                        value={theme}
-                        onChange={e => setTheme(e.target.value)}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="form-row">
-                    <div className="form-group">
-                      <label>Additional Requirements</label>
+                      <label>Description <span className="label-hint">(optional — used by Interpret)</span></label>
                       <textarea
-                        placeholder="e.g., Include 5 coins, add moving platforms, make it challenging..."
-                        value={requirements}
-                        onChange={e => setRequirements(e.target.value)}
+                        placeholder="e.g., A hard cave level with lava pits and lots of verticality..."
+                        value={description}
+                        onChange={e => setDescription(e.target.value)}
                         rows={3}
                       />
+                      <button
+                        className="btn-secondary interpret-btn"
+                        onClick={handleInterpret}
+                        disabled={interpreting || !description.trim()}
+                      >
+                        {interpreting ? '⏳ Interpreting...' : '✦ Interpret'}
+                      </button>
                     </div>
                   </div>
 
-                  <EntityRequirements 
-                    entityTypes={entityTypes || []}
-                    requirements={entityRequirements}
-                    onRequirementsChange={setEntityRequirements}
-                  />
+                  <div className="form-divider" />
+
+                  {/* Knob sliders */}
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label>Difficulty <span className="knob-value">{difficulty.toFixed(2)}</span></label>
+                      <input type="range" min="0" max="1" step="0.05"
+                        value={difficulty} onChange={e => setDifficulty(parseFloat(e.target.value))} />
+                      <div className="range-labels"><span>Easy</span><span>Expert</span></div>
+                    </div>
+                  </div>
+
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label>Verticality <span className="knob-value">{verticality.toFixed(2)}</span></label>
+                      <input type="range" min="0" max="1" step="0.05"
+                        value={verticality} onChange={e => setVerticality(parseFloat(e.target.value))} />
+                      <div className="range-labels"><span>Flat</span><span>Tower</span></div>
+                    </div>
+                  </div>
+
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label>Hazard Density <span className="knob-value">{hazardDensity.toFixed(2)}</span></label>
+                      <input type="range" min="0" max="1" step="0.05"
+                        value={hazardDensity} onChange={e => setHazardDensity(parseFloat(e.target.value))} />
+                      <div className="range-labels"><span>None</span><span>Max</span></div>
+                    </div>
+                  </div>
+
+                  <div className="form-row form-row-inline">
+                    <div className="form-group half">
+                      <label>Footholds <span className="knob-value">{targetFootholdCount}</span></label>
+                      <input type="number" min="4" max="16"
+                        value={targetFootholdCount}
+                        onChange={e => setTargetFootholdCount(Math.max(4, Math.min(16, parseInt(e.target.value, 10) || 8)))} />
+                    </div>
+                    <div className="form-group half form-group-checkbox">
+                      <label>
+                        <input type="checkbox" checked={allowLadders}
+                          onChange={e => setAllowLadders(e.target.checked)} />
+                        Allow Ladders
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label>Style Tags <span className="label-hint">comma-separated, e.g. cave, lava</span></label>
+                      <input type="text" placeholder="cave, lava, ruins..."
+                        value={styleTags} onChange={e => setStyleTags(e.target.value)} />
+                    </div>
+                  </div>
+
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label>Seed <span className="label-hint">leave blank for random</span></label>
+                      <input type="number" min="0" placeholder="random"
+                        value={seed} onChange={e => setSeed(e.target.value)} />
+                    </div>
+                  </div>
 
                   <button className="generate-btn" onClick={handleGenerate} disabled={generating}>
                     {generating ? '🎲 Generating...' : '🚀 Generate Level'}

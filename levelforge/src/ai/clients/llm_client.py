@@ -33,12 +33,16 @@ except ImportError:
 
 class LLMClient(ABC):
     """Abstract base class for LLM clients."""
-    
+
     @abstractmethod
     def generate(self, prompt: str, **kwargs) -> str:
         """Generate a response from the LLM."""
         pass
-    
+
+    def generate_with_system(self, system: str, user: str, **kwargs) -> str:
+        """Generate with a separate system prompt. Default: concatenate."""
+        return self.generate(f"{system}\n\nUser request:\n{user}", **kwargs)
+
     @abstractmethod
     def is_available(self) -> bool:
         """Check if this client is available."""
@@ -59,14 +63,28 @@ class OpenAIClient(LLMClient):
         """Generate using OpenAI API."""
         if not self.client:
             raise ValueError("OpenAI client not initialized - API key required")
-        
+
         response = self.client.chat.completions.create(
             model=model,
             messages=[{"role": "user", "content": prompt}],
             **kwargs
         )
         return response.choices[0].message.content
-    
+
+    def generate_with_system(self, system: str, user: str, model: str = "gpt-4o", **kwargs) -> str:
+        if not self.client:
+            raise ValueError("OpenAI client not initialized - API key required")
+
+        response = self.client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            **kwargs
+        )
+        return response.choices[0].message.content
+
     def is_available(self) -> bool:
         """Check if OpenAI is available."""
         return bool(self.api_key) and self.client is not None
@@ -119,14 +137,28 @@ class ZAIClient(LLMClient):
         """Generate using z.ai GLM API."""
         if not self.client:
             raise ValueError("Z-AI client not initialized - API key required")
-        
+
         response = self.client.chat.completions.create(
             model=model,
             messages=[{"role": "user", "content": prompt}],
             **kwargs
         )
         return response.choices[0].message.content
-    
+
+    def generate_with_system(self, system: str, user: str, model: str = "glm-4-flash", **kwargs) -> str:
+        if not self.client:
+            raise ValueError("Z-AI client not initialized - API key required")
+
+        response = self.client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            **kwargs
+        )
+        return response.choices[0].message.content
+
     def is_available(self) -> bool:
         """Check if z.ai is available."""
         return bool(self.api_key) and self.client is not None
@@ -138,18 +170,28 @@ class OllamaClient(LLMClient):
     def __init__(self, base_url: str = "http://localhost:11434"):
         self.base_url = base_url
     
-    def generate(self, prompt: str, model: str = "llama3", **kwargs) -> str:
-        """Generate using local Ollama."""
+    def _ollama_post(self, payload: dict) -> str:
+        """POST to Ollama /api/generate and return the response text."""
+        # Ensure a generous token limit so responses aren't truncated mid-JSON
+        payload.setdefault("options", {})
+        payload["options"].setdefault("num_predict", 2048)
         response = requests.post(
             f"{self.base_url}/api/generate",
-            json={
-                "model": model,
-                "prompt": prompt,
-                "stream": False
-            },
-            **kwargs
+            json=payload,
+            timeout=120,
         )
-        return response.json().get("response", "")
+        data = response.json()
+        if "error" in data:
+            raise ValueError(f"Ollama error: {data['error']}")
+        return data.get("response", "")
+
+    def generate(self, prompt: str, model: str = "llama3", **kwargs) -> str:
+        """Generate using local Ollama."""
+        return self._ollama_post({"model": model, "prompt": prompt, "stream": False})
+
+    def generate_with_system(self, system: str, user: str, model: str = "llama3", **kwargs) -> str:
+        """Generate with a separate system prompt using Ollama's system field."""
+        return self._ollama_post({"model": model, "system": system, "prompt": user, "stream": False})
     
     def is_available(self) -> bool:
         """Check if Ollama is running."""
@@ -190,6 +232,18 @@ class AnthropicClient(LLMClient):
         )
         return message.content[0].text
 
+    def generate_with_system(self, system: str, user: str, model: str = "claude-sonnet-4-6", **kwargs) -> str:
+        if not self.client:
+            raise ValueError("Anthropic client not initialized - API key required")
+
+        message = self.client.messages.create(
+            model=model,
+            max_tokens=4096,
+            system=system,
+            messages=[{"role": "user", "content": user}]
+        )
+        return message.content[0].text
+
     def is_available(self) -> bool:
         """Check if Anthropic is available."""
         return bool(self.api_key) and self.client is not None
@@ -213,6 +267,20 @@ class GrokClient(LLMClient):
         response = self.client.chat.completions.create(
             model=model,
             messages=[{"role": "user", "content": prompt}],
+            **kwargs
+        )
+        return response.choices[0].message.content
+
+    def generate_with_system(self, system: str, user: str, model: str = "grok-2-latest", **kwargs) -> str:
+        if not self.client:
+            raise ValueError("Grok client not initialized - API key required")
+
+        response = self.client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
             **kwargs
         )
         return response.choices[0].message.content
@@ -244,6 +312,20 @@ class DeepSeekClient(LLMClient):
         )
         return response.choices[0].message.content
 
+    def generate_with_system(self, system: str, user: str, model: str = "deepseek-chat", **kwargs) -> str:
+        if not self.client:
+            raise ValueError("DeepSeek client not initialized - API key required")
+
+        response = self.client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            **kwargs
+        )
+        return response.choices[0].message.content
+
     def is_available(self) -> bool:
         """Check if DeepSeek is available."""
         return bool(self.api_key) and self.client is not None
@@ -267,6 +349,20 @@ class MistralClient(LLMClient):
         response = self.client.chat.completions.create(
             model=model,
             messages=[{"role": "user", "content": prompt}],
+            **kwargs
+        )
+        return response.choices[0].message.content
+
+    def generate_with_system(self, system: str, user: str, model: str = "mistral-large-latest", **kwargs) -> str:
+        if not self.client:
+            raise ValueError("Mistral client not initialized - API key required")
+
+        response = self.client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
             **kwargs
         )
         return response.choices[0].message.content

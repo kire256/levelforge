@@ -26,8 +26,8 @@ import random
 from dataclasses import dataclass, field
 from typing import Optional
 
-from semantic_grid import Cell, SemanticGrid32
-from reachability import PlayerConfig, ReachabilityReport, ReachabilityValidator
+from .semantic_grid import Cell, SemanticGrid32
+from .reachability import PlayerConfig, ReachabilityReport, ReachabilityValidator
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -36,8 +36,8 @@ from reachability import PlayerConfig, ReachabilityReport, ReachabilityValidator
 W              = SemanticGrid32.WIDTH    # 32
 H              = SemanticGrid32.HEIGHT   # 32
 PLAYER_HEIGHT  = 2
-MAX_RETRIES    = 40          # outer: whole-level retries
-MAX_STEP_TRIES = 50          # inner: attempts per individual foothold
+MAX_RETRIES    = 100         # outer: whole-level retries
+MAX_STEP_TRIES = 200         # inner: attempts per individual foothold
 GOAL_X_MIN     = 26          # last foothold's left edge must reach this
 
 
@@ -83,6 +83,7 @@ class GeneratorKnobs:
     max_foothold_width:    int   = 6
     verticality:           float = 0.5   # 0 = flat,  1 = highly vertical
     difficulty:            float = 0.3   # 0 = easy (wide/close), 1 = hard
+    allow_ladders:         bool  = False
 
 
 @dataclass
@@ -171,6 +172,15 @@ def _generate_footholds(
         diff_min   = round(spec.max_jump_distance * 0.25 * knobs.difficulty)
         min_dx     = min(max(prog_min, diff_min, 1), spec.max_jump_distance)
 
+        # Upper bound on dx: reserve space so remaining footholds can still fit.
+        # Each future foothold needs at least min_foothold_width of x-clearance.
+        # Without this cap the algorithm can advance too fast early on, leaving
+        # the last foothold unable to reach GOAL_X_MIN within max_jump_distance.
+        max_x_budget = W - 2 - knobs.min_foothold_width - (N - 1 - i)
+        eff_max_dx   = min(spec.max_jump_distance, max_x_budget - prev.x)
+        if eff_max_dx < min_dx:
+            return None   # Already too far right; restart with a new seed
+
         # dy: scaled by verticality (0 = flat, 1 = full range)
         max_up   = max(0, round(spec.max_jump_height * knobs.verticality))
         max_down = max(0, round(spec.max_safe_drop   * knobs.verticality))
@@ -185,7 +195,7 @@ def _generate_footholds(
 
         placed = False
         for _ in range(MAX_STEP_TRIES):
-            dx    = rng.randint(min_dx, spec.max_jump_distance)
+            dx    = rng.randint(min_dx, eff_max_dx)
             dy    = rng.randint(-max_up, max_down) if (max_up + max_down) > 0 else 0
             w     = rng.randint(knobs.min_foothold_width, eff_max_w)
             new_x = prev.x + dx
@@ -224,6 +234,7 @@ def _generate_footholds(
 def footholds_to_grid(
     footholds:     list[Foothold],
     player_height: int = PLAYER_HEIGHT,
+    allow_ladders: bool = False,
 ) -> SemanticGrid32:
     """
     Convert a foothold list into a SemanticGrid32.
@@ -261,6 +272,25 @@ def footholds_to_grid(
     last  = footholds[-1]
     grid.set(first.x + first.width // 2, first.y, Cell.START)
     grid.set(last.x  + last.width  // 2, last.y,  Cell.GOAL)
+
+    # Phase 5 — ladder columns between footholds with significant drops
+    if allow_ladders:
+        for i in range(len(footholds) - 1):
+            fh_a = footholds[i]
+            fh_b = footholds[i + 1]
+            dy = fh_b.y - fh_a.y   # positive = fh_b is lower
+            if dy <= 2:
+                continue
+            # Place a vertical ladder column at fh_b's leftmost x,
+            # spanning from fh_a's player level down to fh_b's player level.
+            lx = fh_b.x
+            for row in range(fh_a.y, fh_b.y + 1):
+                if 0 <= lx < W and 0 <= row < H:
+                    grid.addFlags(lx, row, Cell.LADDER)
+            # Solid landing platform at the top of the ladder so it connects
+            # to a surface (fh_a may not span lx if lx = fh_b.x is outside fh_a).
+            if 0 <= lx < W and 0 <= fh_a.surface_y < H:
+                grid.addFlags(lx, fh_a.surface_y, Cell.SOLID)
 
     return grid
 
@@ -300,7 +330,7 @@ def generate_level(
         if footholds is None:
             continue
 
-        grid   = footholds_to_grid(footholds)
+        grid   = footholds_to_grid(footholds, allow_ladders=knobs.allow_ladders)
         report = validator.validate(grid)
         if report.reachable:
             return GenerationResult(

@@ -552,7 +552,7 @@ export default function Layout({
                   {selectedItem && selectedItem.type === 'Entity' && !inspectorContent && onEditItem && (
                     <button className="btn-small" onClick={() => onEditItem(selectedItem)}>Edit</button>
                   )}
-                  {selectedItem && selectedItem.type === 'Level' && !inspectorContent && onDeleteLevel && (
+                  {selectedItem && selectedItem.type === 'Level' && onDeleteLevel && (
                     <button className="btn-small btn-danger" onClick={() => onDeleteLevel(selectedItem)}>Delete</button>
                   )}
                   <button 

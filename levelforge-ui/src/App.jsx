@@ -361,6 +361,28 @@ function App() {
     setShowProjectModal(false)
   }
   
+  const handleInterpretDescription = async (description) => {
+    try {
+      logToConsole('Interpreting description with LLM...', 'ai-progress')
+      const res = await fetch(`${API_BASE}/api/interpret-level-plan`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ description, model: selectedModel || undefined }),
+      })
+      if (!res.ok) {
+        const err = await res.text()
+        logToConsole(`Interpret failed (${res.status}): ${err}`, 'error')
+        return null
+      }
+      const plan = await res.json()
+      logToConsole(`Interpreted knobs: ${JSON.stringify(plan)}`, 'success')
+      return plan
+    } catch (err) {
+      logToConsole(`Interpret error: ${err.message}`, 'error')
+      return null
+    }
+  }
+
   const handleGenerateLevel = async (settings) => {
     if (!currentProject) {
       const msg = 'Please select a project first'
@@ -368,25 +390,23 @@ function App() {
       alert(msg)
       return
     }
-    
-    // Auto-show console when generation starts
+
     logToConsole('=== Level Generation Started ===', 'ai-progress')
     logToConsole(`Project: ${currentProject.name}`, 'system')
-    logToConsole(`Genre: ${settings.genre}`, 'system')
-    logToConsole(`Difficulty: ${settings.difficulty}`, 'system')
-    logToConsole(`Theme: ${settings.theme}`, 'system')
-    
+    logToConsole(`Difficulty: ${settings.difficulty}  Verticality: ${settings.verticality}`, 'system')
+    logToConsole(`Tags: [${(settings.style_tags || []).join(', ')}]`, 'system')
+
     setGenerating(true)
     setProgress(0)
     setProgressMessage('Starting...')
-    
+
     try {
       logToConsole('Sending request to backend...', 'ai-progress')
-      
+
       const requestBody = {
         ...settings,
         model: selectedModel || undefined,
-        project_id: currentProject.id
+        project_id: currentProject.id,
       }
       logToConsole(`Request: ${JSON.stringify(requestBody, null, 2)}`, 'debug')
       
@@ -526,7 +546,7 @@ function App() {
     }
   }
 
-  const handleTilemapChange = useCallback(async (tilemapData) => {
+  const handleTilemapChange = useCallback(async (tilemapData, ladderData) => {
     if (!currentLevel) return
 
     let levelData = null
@@ -540,6 +560,7 @@ function App() {
     if (!levelData) return
 
     levelData.tilemap = tilemapData
+    if (ladderData) levelData.ladder_tilemap = ladderData
     const updatedLevel = { ...currentLevel, level_data: JSON.stringify(levelData) }
     setCurrentLevel(updatedLevel)
     setLevelWithHistory(updatedLevel, false)
@@ -589,7 +610,10 @@ function App() {
       if (!res.ok) throw new Error('Failed to delete level')
 
       await loadLevels(currentProject.id)
-      if (currentLevel?.id === level.id) setCurrentLevel(null)
+      if (currentLevel?.id === level.id) {
+        setCurrentLevel(null)
+        setActiveTab('dashboard')
+      }
       if (selectedItem?.id === level.id && selectedItem?.type === 'Level') setSelectedItem(null)
       setSelectedObject(null) // Clear selected object too
       logToConsole(`Deleted level "${level.name}"`, 'info')
@@ -1186,6 +1210,7 @@ Built with ❤️ by OpenClaw`)
             currentLevel={displayLevel}
             onSelectLevel={handleSelectLevel}
             onGenerateLevel={handleGenerateLevel}
+            onInterpretDescription={handleInterpretDescription}
             generating={generating}
             progress={progress}
             progressMessage={progressMessage}

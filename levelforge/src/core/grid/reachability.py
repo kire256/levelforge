@@ -28,7 +28,7 @@ from collections import deque
 from dataclasses import dataclass, field
 from typing import Optional
 
-from semantic_grid import Cell, SemanticGrid32
+from .semantic_grid import Cell, SemanticGrid32
 
 Pos = tuple[int, int]   # (x=col, y=row)
 
