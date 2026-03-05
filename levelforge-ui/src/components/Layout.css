@@ -823,6 +823,8 @@ html, body, #root {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .inspector-edit-form .form-section label {
@@ -868,9 +870,12 @@ html, body, #root {
 
 .inspector-edit-form .emoji-grid {
   display: grid;
-  grid-template-columns: repeat(9, 1fr);
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 4px;
   margin-bottom: 6px;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .inspector-edit-form .emoji-btn {

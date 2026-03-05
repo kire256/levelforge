@@ -14,15 +14,15 @@ const ENTITY_CATEGORIES = [
 const ENTITY_EMOJIS = [
   '🧑', '🚩', '🪙', '🔑', '💎', '⭐', '❤️', '💜', '🛡️',
   '👾', '🦇', '🤖', '👻', '💀', '🕷️', '🐉', '👹', '👿',
-  '⚠️', '🔥', '💧', '❄️', '⚡', '💨', '☀️', '🌙', '🌀',
+  '⚠️', '📍', '🔥', '💧', '❄️', '⚡', '💨', '☀️', '🌙', '🌀',
   '📦', '🪨', '🌳', '🍄', '🌸', '🍀', '🌊', '⛰️', '🌋',
   '⚔️', '🏹', '🔮', '📜', '🎁', '🏆', '🔔', '💣', '🧪'
 ]
 
 const METADATA_TYPES = ['text', 'number', 'boolean', 'select']
 
-export default function Entities({ 
-  entityTypes, 
+export default function Entities({
+  entityTypes,
   currentProject,
   onCreateEntityType,
   onUpdateEntityType,
@@ -33,18 +33,18 @@ export default function Entities({
 }) {
   const [activeCategory, setActiveCategory] = useState('actors')
   const [searchQuery, setSearchQuery] = useState('')
-  
+
   // Panel width
   const [leftWidth, setLeftWidth] = useState(180)
-  
+
   // Resize state
   const isResizingLeft = useRef(false)
   const containerRef = useRef(null)
-  
-  const filteredEntities = entityTypes.filter(et => 
+
+  const filteredEntities = entityTypes.filter(et =>
     et.name.toLowerCase().includes(searchQuery.toLowerCase())
   )
-  
+
   // Resize handlers
   const handleLeftMouseDown = useCallback((e) => {
     e.preventDefault()
@@ -52,19 +52,19 @@ export default function Entities({
     document.body.style.cursor = 'col-resize'
     document.body.style.userSelect = 'none'
   }, [])
-  
+
   useEffect(() => {
     const handleMouseMove = (e) => {
       if (!containerRef.current) return
-      
+
       const containerRect = containerRef.current.getBoundingClientRect()
-      
+
       if (isResizingLeft.current) {
         const newWidth = e.clientX - containerRect.left
         setLeftWidth(Math.max(140, Math.min(280, newWidth)))
       }
     }
-    
+
     const handleMouseUp = () => {
       if (isResizingLeft.current) {
         isResizingLeft.current = false
@@ -72,16 +72,16 @@ export default function Entities({
         document.body.style.userSelect = ''
       }
     }
-    
+
     document.addEventListener('mousemove', handleMouseMove)
     document.addEventListener('mouseup', handleMouseUp)
-    
+
     return () => {
       document.removeEventListener('mousemove', handleMouseMove)
       document.removeEventListener('mouseup', handleMouseUp)
     }
   }, [])
-  
+
   const handleCreate = () => {
     // Create new entity with defaults - could also use inspector in future
     onCreateEntityType({
@@ -96,11 +96,7 @@ export default function Entities({
       metadata_fields: '[]'
     })
   }
-  
-  const handleEdit = (entity) => {
-    onEditEntity && onEditEntity(entity)
-  }
-  
+
   if (!currentProject) {
     return (
       <div className="entities-page">
@@ -112,7 +108,7 @@ export default function Entities({
       </div>
     )
   }
-  
+
   return (
     <div className="entities-page" ref={containerRef}>
       {/* Left Sub-Navigation */}
@@ -133,10 +129,10 @@ export default function Entities({
           ))}
         </nav>
       </aside>
-      
+
       {/* Left resize handle */}
       <div className="resize-handle-vertical" onMouseDown={handleLeftMouseDown} />
-      
+
       {/* Main Content Area */}
       <main className="main-area">
         {/* Toolbar */}
@@ -155,7 +151,7 @@ export default function Entities({
             <button className="btn-primary" onClick={handleCreate}>+ Create Entity</button>
           </div>
         </div>
-        
+
         {/* Data Grid */}
         <div className="data-grid-container">
           {filteredEntities.length === 0 ? (
@@ -179,11 +175,11 @@ export default function Entities({
               </thead>
               <tbody>
                 {filteredEntities.map(entity => (
-                  <tr 
-                    key={entity.id} 
+                  <tr
+                    key={entity.id}
                     className={selectedEntity?.id === entity.id ? 'selected' : ''}
                     onClick={() => {
-                      setSelectedEntity && onSelectEntity(entity)
+                      onSelectEntity && onSelectEntity(entity)
                     }}
                   >
                     <td className="col-icon">
@@ -204,9 +200,6 @@ export default function Entities({
                       <span className="truncate">{entity.behavior || '-'}</span>
                     </td>
                     <td className="col-actions">
-                      <button className="action-btn" onClick={(e) => { e.stopPropagation(); handleEdit(entity) }}>
-                        ✏️
-                      </button>
                       <button className="action-btn danger" onClick={(e) => { e.stopPropagation(); onDeleteEntityType(entity.id) }}>
                         🗑️
                       </button>
