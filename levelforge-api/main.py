@@ -64,6 +64,7 @@ class LevelPlanRequest(BaseModel):
     target_foothold_count: int = 8          # 4–16
     allow_ladders: bool = False
     style_tags: List[str] = []
+    entity_requirements: List[dict] = []
     level_name: Optional[str] = None
     model: Optional[str] = None
     project_id: Optional[int] = None
@@ -454,6 +455,27 @@ async def interpret_level_plan(request: InterpretRequest):
     return plan
 
 
+def _get_project_tile_size(project_id: Optional[int]) -> int:
+    """Best-effort project tile size lookup; falls back to 32."""
+    if project_id is None:
+        return 32
+    try:
+        import database as db
+        project = db.get_project(project_id)
+        if project and isinstance(project, dict):
+            return int(project.get("tile_size") or 32)
+    except Exception:
+        pass
+    return 32
+
+
+def _tile_center_to_world(tile_x: int, tile_y: int, tile_size: int) -> tuple[int, int]:
+    """Convert tile-grid coordinates to world-space pixel center coordinates."""
+    x = int(round((tile_x + 0.5) * tile_size))
+    y = int(round((tile_y + 0.5) * tile_size))
+    return x, y
+
+
 def _run_procedural_generation(request: LevelPlanRequest) -> dict:
     """Build knobs, run the procedural generator, and return serialised level_data."""
     seed = request.seed if request.seed is not None else random.randint(0, 2**31)
@@ -475,6 +497,28 @@ def _run_procedural_generation(request: LevelPlanRequest) -> dict:
 
     result = generate_level(seed, knobs, spec)
 
+    rng = random.Random(seed)
+    tile_size = _get_project_tile_size(request.project_id)
+
+    entities = _place_entities(
+        footholds=result.footholds,
+        entity_requirements=request.entity_requirements,
+        project_id=request.project_id,
+        rng=rng,
+        tile_size=tile_size,
+    )
+
+    spawn_x, spawn_y = _tile_center_to_world(
+        result.footholds[0].x + result.footholds[0].width // 2,
+        result.footholds[0].y,
+        tile_size,
+    )
+    goal_x, goal_y = _tile_center_to_world(
+        result.footholds[-1].x + result.footholds[-1].width // 2,
+        result.footholds[-1].y,
+        tile_size,
+    )
+
     plan_dict = {
         "seed": seed,
         "difficulty": request.difficulty,
@@ -491,9 +535,114 @@ def _run_procedural_generation(request: LevelPlanRequest) -> dict:
         "level_plan": plan_dict,
         "semantic_grid": result.grid.toJSON(),
         "footholds": [{"x": fh.x, "y": fh.y, "width": fh.width} for fh in result.footholds],
+        "entities": entities,
+        "platforms": [],
+        "player_spawn": {"x": spawn_x, "y": spawn_y},
+        "goal": {"x": goal_x, "y": goal_y},
         "seed_used": result.seed_used,
         "attempts": result.attempts,
     }
+
+
+def _select_footholds_for_placement(footholds: list, hint: str) -> list:
+    """Return a foothold subset guided by natural-language placement hints."""
+    if not footholds:
+        return []
+
+    text = (hint or "").lower()
+    n = len(footholds)
+
+    if any(w in text for w in ["start", "beginning", "first", "early"]):
+        return footholds[:max(1, n // 3)]
+
+    if any(w in text for w in ["end", "goal", "finish", "last", "late"]):
+        return footholds[max(0, (2 * n) // 3):]
+
+    if "middle" in text or "center" in text:
+        middle = footholds[n // 4:(3 * n) // 4]
+        return middle or footholds
+
+    if any(w in text for w in ["wide", "large", "big"]):
+        wide = [fh for fh in footholds if fh.width >= 3]
+        return wide or footholds
+
+    if any(w in text for w in ["sparse", "sparsely", "rarely"]):
+        sparse = [fh for i, fh in enumerate(footholds) if i % 2 == 0]
+        return sparse or footholds
+
+    return footholds
+
+
+def _place_entities(
+    footholds: list,
+    entity_requirements: list,
+    project_id: Optional[int],
+    rng: random.Random,
+    tile_size: int = 32,
+) -> list:
+    """Generate concrete entities from requirements + entity type placement/behavior rules."""
+    if not footholds or not entity_requirements:
+        return []
+
+    entity_type_by_id = {}
+    if project_id is not None:
+        try:
+            import database as db
+            db_entity_types = db.get_entity_types(project_id)
+            entity_type_by_id = {et.get("id"): et for et in db_entity_types}
+        except Exception as e:
+            logger.warning(f"Failed to load entity types for project {project_id}: {e}")
+
+    entities = []
+
+    for req in entity_requirements:
+        if not isinstance(req, dict):
+            continue
+
+        try:
+            count = max(1, int(req.get("count", 1)))
+        except (TypeError, ValueError):
+            count = 1
+
+        entity_id = req.get("entityId")
+        req_name = (req.get("entityName") or "entity").strip() or "entity"
+        req_placement = req.get("placement") or ""
+
+        et = entity_type_by_id.get(entity_id, {}) if entity_id is not None else {}
+        entity_name = (et.get("name") or req_name).strip() or req_name
+        behavior = et.get("behavior") or ""
+        placement_rules = et.get("placement_rules") or ""
+
+        combined_hint = f"{req_placement} {placement_rules}".strip()
+        pool = _select_footholds_for_placement(footholds, combined_hint)
+        if not pool:
+            pool = footholds
+
+        if any(w in combined_hint.lower() for w in ["cluster", "grouped", "together"]):
+            anchor = rng.choice(pool)
+            cluster_pool = [
+                fh for fh in pool
+                if abs(fh.x - anchor.x) <= 4 and abs(fh.y - anchor.y) <= 3
+            ]
+            if cluster_pool:
+                pool = cluster_pool
+
+        for i in range(count):
+            foothold = pool[i % len(pool)] if len(pool) > 0 else footholds[i % len(footholds)]
+            tile_x = foothold.x + rng.randint(0, max(0, foothold.width - 1))
+            tile_y = foothold.y
+            x, y = _tile_center_to_world(tile_x, tile_y, tile_size)
+
+            entities.append({
+                "type": entity_name,
+                "name": f"{entity_name} {len([e for e in entities if e.get('type') == entity_name]) + 1}",
+                "x": x,
+                "y": y,
+                "behavior": behavior,
+                "placement_hint": req_placement,
+            })
+
+    return entities
 
 
 async def generate_level_events(request: LevelPlanRequest):

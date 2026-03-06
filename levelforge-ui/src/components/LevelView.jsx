@@ -217,6 +217,64 @@ export default function LevelView({ level, mode = 'draft', onModeChange, entityT
     }
     return ENTITY_COLORS[type] || ENTITY_COLORS[normalizedType] || ENTITY_COLORS.unknown
   }, [customEntityLookup])
+
+  const getStableWorldBounds = useCallback(() => {
+    // Prefer fixed level bounds so object movement doesn't rescale/recenter the whole layer.
+    const gridWidth = levelData?.semantic_grid?.width || levelData?.tilemap?.width || 32
+    const gridHeight = levelData?.semantic_grid?.height || levelData?.tilemap?.height || 32
+
+    if (gridWidth > 0 && gridHeight > 0) {
+      return {
+        minX: 0,
+        maxX: gridWidth * gridSize,
+        minY: 0,
+        maxY: gridHeight * gridSize,
+      }
+    }
+
+    // Fallback for legacy levels without grid metadata.
+    const allPoints = []
+    if (levelData?.platforms) {
+      levelData.platforms.forEach(p => {
+        allPoints.push({ x: p.x, y: p.y })
+        allPoints.push({ x: p.x + p.width, y: p.y + p.height })
+      })
+    }
+    if (levelData?.entities) {
+      levelData.entities.forEach(e => allPoints.push({ x: e.x, y: e.y }))
+    }
+    if (levelData?.player_spawn) allPoints.push(levelData.player_spawn)
+    if (levelData?.goal) allPoints.push(levelData.goal)
+
+    if (allPoints.length === 0) {
+      return { minX: 0, maxX: 800, minY: 0, maxY: 600 }
+    }
+
+    let minX = Math.min(...allPoints.map(p => p.x))
+    let maxX = Math.max(...allPoints.map(p => p.x))
+    let minY = Math.min(...allPoints.map(p => p.y))
+    let maxY = Math.max(...allPoints.map(p => p.y))
+    const paddingX = Math.max(50, (maxX - minX) * 0.1)
+    const paddingY = Math.max(50, (maxY - minY) * 0.1)
+    minX -= paddingX
+    maxX += paddingX
+    minY -= paddingY
+    maxY += paddingY
+    return { minX, maxX, minY, maxY }
+  }, [levelData, gridSize])
+
+  const getViewTransform = useCallback((canvas) => {
+    const { minX, maxX, minY, maxY } = getStableWorldBounds()
+    const levelWidth = maxX - minX
+    const levelHeight = maxY - minY
+    const scaleX = (canvas.width - 100) / levelWidth
+    const scaleY = (canvas.height - 100) / levelHeight
+    const baseScale = Math.min(scaleX, scaleY, 1)
+    const scale = baseScale * zoom
+    const offsetX = canvas.width / 2 - (minX + levelWidth / 2) * scale + pan.x
+    const offsetY = canvas.height / 2 - (minY + levelHeight / 2) * scale + pan.y
+    return { scale, offsetX, offsetY }
+  }, [getStableWorldBounds, zoom, pan])
   
   // Helper to detect what object is at canvas coordinates - MUST be defined before handleMouseDown
   const getObjectAtPosition = useCallback((canvasX, canvasY) => {
@@ -225,53 +283,11 @@ export default function LevelView({ level, mode = 'draft', onModeChange, entityT
     const canvas = canvasRef.current
     if (!canvas) return null
     
-    // Calculate transform (same as renderDraftView)
-    const allPoints = []
-    if (levelData.platforms) {
-      levelData.platforms.forEach(p => {
-        allPoints.push({ x: p.x, y: p.y })
-        allPoints.push({ x: p.x + p.width, y: p.y + p.height })
-      })
-    }
-    if (levelData.entities) {
-      levelData.entities.forEach(e => {
-        allPoints.push({ x: e.x, y: e.y })
-      })
-    }
-    if (levelData.player_spawn) {
-      allPoints.push({ x: levelData.player_spawn.x, y: levelData.player_spawn.y })
-    }
-    if (levelData.goal) {
-      allPoints.push({ x: levelData.goal.x, y: levelData.goal.y })
-    }
-    
-    let minX = 0, maxX = 800, minY = 0, maxY = 600
-    if (allPoints.length > 0) {
-      minX = Math.min(...allPoints.map(p => p.x))
-      maxX = Math.max(...allPoints.map(p => p.x))
-      minY = Math.min(...allPoints.map(p => p.y))
-      maxY = Math.max(...allPoints.map(p => p.y))
-      const paddingX = Math.max(50, (maxX - minX) * 0.1)
-      const paddingY = Math.max(50, (maxY - minY) * 0.1)
-      minX -= paddingX
-      maxX += paddingX
-      minY -= paddingY
-      maxY += paddingY
-    }
-    
-    const levelWidth = maxX - minX
-    const levelHeight = maxY - minY
-    const scaleX = (canvas.width - 100) / levelWidth
-    const scaleY = (canvas.height - 100) / levelHeight
-    const baseScale = Math.min(scaleX, scaleY, 1)
-    const scale = baseScale * zoom
-    
-    const offsetX = canvas.width / 2 - (minX + levelWidth / 2) * scale + pan.x
-    const offsetY = canvas.height / 2 + (minY + levelHeight / 2) * scale + pan.y
+    const { scale, offsetX, offsetY } = getViewTransform(canvas)
     
     // Convert to world coordinates
     const worldX = (canvasX - offsetX) / scale
-    const worldY = (offsetY - canvasY) / scale
+    const worldY = (canvasY - offsetY) / scale
     
     const hitRadius = 20 / scale
     
@@ -292,7 +308,7 @@ export default function LevelView({ level, mode = 'draft', onModeChange, entityT
       for (let i = levelData.platforms.length - 1; i >= 0; i--) {
         const p = levelData.platforms[i]
         if (worldX >= p.x && worldX <= p.x + p.width &&
-            worldY <= p.y && worldY >= p.y - p.height) {
+            worldY >= p.y && worldY <= p.y + p.height) {
           return { type: 'platform', data: p, index: i }
         }
       }
@@ -319,7 +335,7 @@ export default function LevelView({ level, mode = 'draft', onModeChange, entityT
     }
     
     return null
-  }, [levelData, zoom, pan])
+  }, [levelData, getViewTransform])
   
   // Mouse event handlers for panning and object dragging
   const handleMouseDown = useCallback((e) => {
@@ -359,51 +375,11 @@ export default function LevelView({ level, mode = 'draft', onModeChange, entityT
       
       const canvas = canvasRef.current
       if (!canvas || !levelData) return
+      const { scale } = getViewTransform(canvas)
       
-      // Calculate scale
-      const allPoints = []
-      if (levelData.platforms) {
-        levelData.platforms.forEach(p => {
-          allPoints.push({ x: p.x, y: p.y })
-          allPoints.push({ x: p.x + p.width, y: p.y + p.height })
-        })
-      }
-      if (levelData.entities) {
-        levelData.entities.forEach(e => {
-          allPoints.push({ x: e.x, y: e.y })
-        })
-      }
-      if (levelData.player_spawn) {
-        allPoints.push({ x: levelData.player_spawn.x, y: levelData.player_spawn.y })
-      }
-      if (levelData.goal) {
-        allPoints.push({ x: levelData.goal.x, y: levelData.goal.y })
-      }
-      
-      let minX = 0, maxX = 800, minY = 0, maxY = 600
-      if (allPoints.length > 0) {
-        minX = Math.min(...allPoints.map(p => p.x))
-        maxX = Math.max(...allPoints.map(p => p.x))
-        minY = Math.min(...allPoints.map(p => p.y))
-        maxY = Math.max(...allPoints.map(p => p.y))
-        const paddingX = Math.max(50, (maxX - minX) * 0.1)
-        const paddingY = Math.max(50, (maxY - minY) * 0.1)
-        minX -= paddingX
-        maxX += paddingX
-        minY -= paddingY
-        maxY += paddingY
-      }
-      
-      const levelWidth = maxX - minX
-      const levelHeight = maxY - minY
-      const scaleX = (canvas.width - 100) / levelWidth
-      const scaleY = (canvas.height - 100) / levelHeight
-      const baseScale = Math.min(scaleX, scaleY, 1)
-      const scale = baseScale * zoom
-      
-      // Convert screen delta to world delta (Y is flipped)
+      // Convert screen delta to world delta
       const worldDeltaX = deltaX / scale
-      const worldDeltaY = -deltaY / scale
+      const worldDeltaY = deltaY / scale
       
       // Calculate new position
       let newX = dragStartWorld.x + worldDeltaX
@@ -432,7 +408,7 @@ export default function LevelView({ level, mode = 'draft', onModeChange, entityT
         y: e.clientY - panStart.y
       })
     }
-  }, [isDraggingEntity, draggingObject, dragStartWorld, isPanning, panStart, zoom, levelData, onSelectObject, snapToGrid, gridSize])
+  }, [isDraggingEntity, draggingObject, dragStartWorld, isPanning, panStart, levelData, onSelectObject, snapToGrid, gridSize, getViewTransform])
   
   const handleMouseUp = useCallback(() => {
     // If we were dragging an entity, persist the change
@@ -577,58 +553,7 @@ export default function LevelView({ level, mode = 'draft', onModeChange, entityT
     // Always clear with transparent - tilemap layer provides background
     ctx.clearRect(0, 0, canvas.width, canvas.height)
     
-    // Collect all coordinates to determine bounds
-    const allPoints = []
-    
-    if (levelData.platforms) {
-      levelData.platforms.forEach(p => {
-        allPoints.push({ x: p.x, y: p.y })
-        allPoints.push({ x: p.x + p.width, y: p.y + p.height })
-      })
-    }
-    
-    if (levelData.entities) {
-      levelData.entities.forEach(e => {
-        allPoints.push({ x: e.x, y: e.y })
-      })
-    }
-    
-    if (levelData.player_spawn) {
-      allPoints.push({ x: levelData.player_spawn.x, y: levelData.player_spawn.y })
-    }
-    
-    if (levelData.goal) {
-      allPoints.push({ x: levelData.goal.x, y: levelData.goal.y })
-    }
-    
-    // Calculate bounds
-    let minX = 0, maxX = 800, minY = 0, maxY = 600
-    if (allPoints.length > 0) {
-      minX = Math.min(...allPoints.map(p => p.x))
-      maxX = Math.max(...allPoints.map(p => p.x))
-      minY = Math.min(...allPoints.map(p => p.y))
-      maxY = Math.max(...allPoints.map(p => p.y))
-      
-      // Add padding
-      const paddingX = Math.max(50, (maxX - minX) * 0.1)
-      const paddingY = Math.max(50, (maxY - minY) * 0.1)
-      minX -= paddingX
-      maxX += paddingX
-      minY -= paddingY
-      maxY += paddingY
-    }
-    
-    // Calculate scale to fit level in canvas
-    const levelWidth = maxX - minX
-    const levelHeight = maxY - minY
-    const scaleX = (canvas.width - 100) / levelWidth
-    const scaleY = (canvas.height - 100) / levelHeight
-    const baseScale = Math.min(scaleX, scaleY, 1) // Don't zoom in beyond 1:1
-    const scale = baseScale * zoom
-    
-    // Center offset
-    const offsetX = canvas.width / 2 - (minX + levelWidth / 2) * scale + pan.x
-    const offsetY = canvas.height / 2 + (minY + levelHeight / 2) * scale + pan.y
+    const { scale, offsetX, offsetY } = getViewTransform(canvas)
     
     // Draw grid (conditional)
     if (showGrid) {
@@ -662,27 +587,27 @@ export default function LevelView({ level, mode = 'draft', onModeChange, entityT
         const displayPlatform = isSelected ? selectedObject.data : platform
         
         const x = displayPlatform.x * scale + offsetX
-        const y = offsetY - displayPlatform.y * scale // Flip Y axis
+        const y = displayPlatform.y * scale + offsetY
         const width = displayPlatform.width * scale
         const height = displayPlatform.height * scale
         
         // Fill
         ctx.fillStyle = ENTITY_COLORS.platform
-        ctx.fillRect(x, y - height, width, height)
+        ctx.fillRect(x, y, width, height)
         
         // Hover highlight
         const isHovered = hoveredObject?.type === 'platform' && hoveredObject?.index === i && !isSelected
         if (isHovered) {
           ctx.strokeStyle = '#a5b4fc'
           ctx.lineWidth = 2
-          ctx.strokeRect(x - 1, y - height - 1, width + 2, height + 2)
+          ctx.strokeRect(x - 1, y - 1, width + 2, height + 2)
         }
         
         // Selection highlight
         if (isSelected) {
           ctx.strokeStyle = '#6366f1'
           ctx.lineWidth = 3
-          ctx.strokeRect(x - 1.5, y - height - 1.5, width + 3, height + 3)
+          ctx.strokeRect(x - 1.5, y - 1.5, width + 3, height + 3)
         }
       })
     }
@@ -695,7 +620,7 @@ export default function LevelView({ level, mode = 'draft', onModeChange, entityT
         const displayEntity = isSelected ? selectedObject.data : entity
         
         const x = displayEntity.x * scale + offsetX
-        const y = offsetY - displayEntity.y * scale // Flip Y axis
+        const y = displayEntity.y * scale + offsetY
         const entityType = entity.type || 'unknown'
         const symbol = getEntitySymbol(entityType)
         const color = getEntityColor(entityType)
@@ -742,7 +667,7 @@ export default function LevelView({ level, mode = 'draft', onModeChange, entityT
       const displaySpawn = isSelected ? selectedObject.data : levelData.player_spawn
       
       const x = displaySpawn.x * scale + offsetX
-      const y = offsetY - displaySpawn.y * scale
+      const y = displaySpawn.y * scale + offsetY
       
       // Hover highlight
       const isHovered = hoveredObject?.type === 'spawn' && !isSelected
@@ -781,7 +706,7 @@ export default function LevelView({ level, mode = 'draft', onModeChange, entityT
       const displayGoal = isSelected ? selectedObject.data : levelData.goal
       
       const x = displayGoal.x * scale + offsetX
-      const y = offsetY - displayGoal.y * scale
+      const y = displayGoal.y * scale + offsetY
       
       // Hover highlight
       const isHovered = hoveredObject?.type === 'goal' && !isSelected
@@ -812,7 +737,7 @@ export default function LevelView({ level, mode = 'draft', onModeChange, entityT
       ctx.fillStyle = '#6b7280'
       ctx.fillText('GOAL', x, y + 16 * scale)
     }
-  }, [levelData, zoom, pan, customEntityLookup, selectedObject, hoveredObject, getEntitySymbol, getEntityColor, showGrid, gridSize])
+  }, [levelData, customEntityLookup, selectedObject, hoveredObject, getEntitySymbol, getEntityColor, showGrid, gridSize, getViewTransform])
   
   // Trigger render when dependencies change
   useEffect(() => {

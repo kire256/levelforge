@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import LevelView from './LevelView'
 import TilemapCanvas, { TOOLS } from './TilemapCanvas'
+import EntityRequirements from './EntityRequirements'
 import './Levels.css'
 import { API_BASE } from '../utils/api'
 import { SemanticGrid32, Cell } from '../models/semanticGrid.js'
@@ -58,6 +59,7 @@ export default function Levels({
   const [targetFootholdCount, setTargetFootholdCount] = useState(8)
   const [allowLadders, setAllowLadders]             = useState(false)
   const [styleTags, setStyleTags]                   = useState('')
+  const [entityRequirements, setEntityRequirements] = useState([])
   const [interpreting, setInterpreting]             = useState(false)
   
   // Sidebar tab state
@@ -327,8 +329,64 @@ export default function Levels({
       target_foothold_count: targetFootholdCount,
       allow_ladders: allowLadders,
       style_tags: styleTags.split(',').map(s => s.trim()).filter(Boolean),
+      entity_requirements: entityRequirements,
     })
   }
+
+  const buildEntityRequirementFromType = useCallback((entityType, count, placementText) => ({
+    id: Date.now() + Math.floor(Math.random() * 100000),
+    entityId: entityType.id,
+    entityName: entityType.name,
+    entityEmoji: entityType.emoji,
+    count: Math.max(1, Number(count) || 1),
+    placement: placementText || entityType.placement_rules || 'distributed throughout level',
+  }), [])
+
+  const extractEntityRequirementsFromDescription = useCallback((text) => {
+    if (!text?.trim() || entityTypes.length === 0) return []
+
+    const lower = text.toLowerCase()
+    const extracted = []
+
+    for (const entity of entityTypes) {
+      const name = (entity.name || '').trim().toLowerCase()
+      if (!name) continue
+
+      const variants = new Set([
+        name,
+        `${name}s`,
+        `${name}es`,
+      ])
+
+      for (const variant of variants) {
+        const escaped = variant.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+        // e.g. "12 coins"
+        const beforePattern = new RegExp(`\\b(\\d+)\\s+${escaped}\\b`, 'i')
+        const beforeMatch = lower.match(beforePattern)
+        if (beforeMatch) {
+          extracted.push(buildEntityRequirementFromType(entity, parseInt(beforeMatch[1], 10), entity.placement_rules))
+          break
+        }
+
+        // e.g. "coins x12"
+        const afterPattern = new RegExp(`\\b${escaped}\\s*[x×]\\s*(\\d+)\\b`, 'i')
+        const afterMatch = lower.match(afterPattern)
+        if (afterMatch) {
+          extracted.push(buildEntityRequirementFromType(entity, parseInt(afterMatch[1], 10), entity.placement_rules))
+          break
+        }
+      }
+    }
+
+    // De-duplicate by entityId (keep first)
+    const seen = new Set()
+    return extracted.filter(req => {
+      if (seen.has(req.entityId)) return false
+      seen.add(req.entityId)
+      return true
+    })
+  }, [entityTypes, buildEntityRequirementFromType])
 
   const handleInterpret = async () => {
     if (!description.trim() || !onInterpretDescription) return
@@ -342,6 +400,24 @@ export default function Levels({
       if (plan.allow_ladders       !== undefined) setAllowLadders(plan.allow_ladders)
       if (plan.style_tags          !== undefined) setStyleTags(plan.style_tags.join(', '))
       if (plan.seed                !== undefined) setSeed(String(plan.seed))
+
+      // If interpret returns explicit entity requirements, use them.
+      // Otherwise, infer from description using project entity type names (e.g. "12 coins").
+      if (Array.isArray(plan.entity_requirements) && plan.entity_requirements.length > 0) {
+        const mapped = plan.entity_requirements
+          .map((req) => {
+            const byId = entityTypes.find(et => et.id === req.entityId)
+            const byName = entityTypes.find(et => et.name?.toLowerCase() === String(req.entityName || '').toLowerCase())
+            const entity = byId || byName
+            if (!entity) return null
+            return buildEntityRequirementFromType(entity, req.count, req.placement)
+          })
+          .filter(Boolean)
+        if (mapped.length > 0) setEntityRequirements(mapped)
+      } else {
+        const inferred = extractEntityRequirementsFromDescription(description)
+        if (inferred.length > 0) setEntityRequirements(inferred)
+      }
     }
     setInterpreting(false)
   }
@@ -915,6 +991,16 @@ export default function Levels({
                       <label>Seed <span className="label-hint">leave blank for random</span></label>
                       <input type="number" min="0" placeholder="random"
                         value={seed} onChange={e => setSeed(e.target.value)} />
+                    </div>
+                  </div>
+
+                  <div className="form-row">
+                    <div className="form-group">
+                      <EntityRequirements
+                        entityTypes={entityTypes}
+                        requirements={entityRequirements}
+                        onRequirementsChange={setEntityRequirements}
+                      />
                     </div>
                   </div>
 
