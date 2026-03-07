@@ -58,6 +58,8 @@ def get_generator() -> LevelGenerator:
 class LevelPlanRequest(BaseModel):
     """Structured knobs for the procedural level generator."""
     seed: Optional[int] = None              # None = random each time
+    level_width: int = 32
+    level_height: int = 32
     difficulty: float = 0.5                 # 0.0–1.0
     verticality: float = 0.3                # 0.0–1.0
     hazard_density: float = 0.1             # 0.0–1.0
@@ -441,6 +443,8 @@ async def interpret_level_plan(request: InterpretRequest):
             raise HTTPException(status_code=422, detail=f"LLM did not return valid JSON: {e}\nRaw: {raw[:200]}")
 
     # Clamp and validate numeric fields
+    plan["level_width"] = max(8, min(256, int(plan.get("level_width", 32))))
+    plan["level_height"] = max(8, min(256, int(plan.get("level_height", 32))))
     plan["difficulty"]    = max(0.0, min(1.0, float(plan.get("difficulty",    0.5))))
     plan["verticality"]   = max(0.0, min(1.0, float(plan.get("verticality",   0.3))))
     plan["hazard_density"] = max(0.0, min(1.0, float(plan.get("hazard_density", 0.1))))
@@ -521,6 +525,8 @@ def _run_procedural_generation(request: LevelPlanRequest) -> dict:
 
     plan_dict = {
         "seed": seed,
+        "level_width": max(8, min(256, int(request.level_width))),
+        "level_height": max(8, min(256, int(request.level_height))),
         "difficulty": request.difficulty,
         "verticality": request.verticality,
         "hazard_density": request.hazard_density,
@@ -533,6 +539,8 @@ def _run_procedural_generation(request: LevelPlanRequest) -> dict:
         "version": "2.0",
         "kind": "procedural",
         "level_plan": plan_dict,
+        "canvas_width": max(8, min(256, int(request.level_width))),
+        "canvas_height": max(8, min(256, int(request.level_height))),
         "semantic_grid": result.grid.toJSON(),
         "footholds": [{"x": fh.x, "y": fh.y, "width": fh.width} for fh in result.footholds],
         "entities": entities,
@@ -594,6 +602,23 @@ def _place_entities(
             logger.warning(f"Failed to load entity types for project {project_id}: {e}")
 
     entities = []
+    # Track occupied tile positions across all entity types to prevent overlaps.
+    occupied_tiles: set[tuple[int, int]] = set()
+
+    def _pick_tile(foothold) -> tuple[int, int]:
+        """Return an unoccupied tile on foothold; falls back to any tile if all occupied."""
+        # Try random positions first (fast path for sparse footholds)
+        for _ in range(20):
+            tx = foothold.x + rng.randint(0, max(0, foothold.width - 1))
+            ty = foothold.y
+            if (tx, ty) not in occupied_tiles:
+                return tx, ty
+        # Linear scan to find any free tile
+        for tx in range(foothold.x, foothold.x + max(1, foothold.width)):
+            if (tx, foothold.y) not in occupied_tiles:
+                return tx, foothold.y
+        # Last resort: return a random position (foothold truly full)
+        return foothold.x + rng.randint(0, max(0, foothold.width - 1)), foothold.y
 
     for req in entity_requirements:
         if not isinstance(req, dict):
@@ -628,9 +653,21 @@ def _place_entities(
                 pool = cluster_pool
 
         for i in range(count):
-            foothold = pool[i % len(pool)] if len(pool) > 0 else footholds[i % len(footholds)]
-            tile_x = foothold.x + rng.randint(0, max(0, foothold.width - 1))
-            tile_y = foothold.y
+            # Start at the preferred foothold and cycle through the pool until we
+            # find a foothold that has at least one free tile slot.
+            tile_x, tile_y = None, None
+            for attempt in range(len(pool)):
+                foothold = pool[(i + attempt) % len(pool)]
+                tx, ty = _pick_tile(foothold)
+                if (tx, ty) not in occupied_tiles:
+                    tile_x, tile_y = tx, ty
+                    break
+            # If every foothold in the pool is full, use the preferred one anyway.
+            if tile_x is None:
+                foothold = pool[i % len(pool)]
+                tile_x, tile_y = _pick_tile(foothold)
+
+            occupied_tiles.add((tile_x, tile_y))
             x, y = _tile_center_to_world(tile_x, tile_y, tile_size)
 
             entities.append({

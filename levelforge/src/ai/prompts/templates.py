@@ -335,6 +335,8 @@ def get_refine_prompt(
 _LEVEL_PLAN_SCHEMA = """\
 {
   "seed": <integer ≥ 0>,
+  "level_width": <integer 8–256>,
+  "level_height": <integer 8–256>,
   "difficulty": <float 0.0–1.0>,
   "verticality": <float 0.0–1.0>,
   "hazard_density": <float 0.0–1.0>,
@@ -369,6 +371,8 @@ Schema:
 
 Field guidance:
 - seed: any non-negative integer; vary it to introduce novelty
+- level_width: grid width in tiles (default 32 if unspecified)
+- level_height: grid height in tiles (default 32 if unspecified)
 - difficulty: 0.0 = trivial gaps, 1.0 = pixel-perfect expert jumps
 - verticality: 0.0 = flat layout, 1.0 = steep tower
 - hazard_density: fraction of open floor cells converted to spikes/lava (0=none)

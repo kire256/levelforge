@@ -59,11 +59,13 @@ export default function Levels({
   const [targetFootholdCount, setTargetFootholdCount] = useState(8)
   const [allowLadders, setAllowLadders]             = useState(false)
   const [styleTags, setStyleTags]                   = useState('')
+  const [levelWidth, setLevelWidth]                 = useState(32)
+  const [levelHeight, setLevelHeight]               = useState(32)
   const [entityRequirements, setEntityRequirements] = useState([])
   const [interpreting, setInterpreting]             = useState(false)
   
-  // Sidebar tab state
-  const [sidebarTab, setSidebarTab] = useState('layers') // 'layers', 'levels', or 'objects'
+  // Single tree state (only one level expanded at a time)
+  const [expandedLevelId, setExpandedLevelId] = useState(currentLevel?.id ?? null)
   
   // Layer visibility
   const [layerVisibility, setLayerVisibility] = useState({
@@ -157,17 +159,38 @@ export default function Levels({
     handleViewModeChange('canvas')
   }
 
-  // Parse current level data for object hierarchy
-  let currentLevelData = null
-  try {
-    if (currentLevel?.level_data) {
-      currentLevelData = typeof currentLevel.level_data === 'string'
-        ? JSON.parse(currentLevel.level_data)
-        : currentLevel.level_data
+  useEffect(() => {
+    if (currentLevel?.id) {
+      setExpandedLevelId(currentLevel.id)
     }
-  } catch {
-    currentLevelData = null
+  }, [currentLevel?.id])
+
+  const parseLevelData = useCallback((rawLevelData) => {
+    if (!rawLevelData) return null
+    try {
+      return typeof rawLevelData === 'string' ? JSON.parse(rawLevelData) : rawLevelData
+    } catch {
+      return null
+    }
+  }, [])
+
+  const handleTreeLevelClick = (level) => {
+    setExpandedLevelId(prev => (prev === level.id ? null : level.id))
+    handleSelectLevel(level)
   }
+
+  // Parse current level data for object hierarchy
+  const currentLevelData = parseLevelData(currentLevel?.level_data)
+
+  const clampCanvasSize = useCallback((value) => {
+    return Math.max(8, Math.min(256, Number(value) || 32))
+  }, [])
+
+  const createEmptyTilemap = useCallback((width, height) => ({
+    width,
+    height,
+    data: Array.from({ length: height }, () => Array(width).fill(null)),
+  }), [])
   
   // Sync tilemap data only when the selected level changes (not when level data is updated in-place)
   useEffect(() => {
@@ -194,6 +217,8 @@ export default function Levels({
       // Ladders go to their own layer; pass ladder: 0 to the main tilemap.
       try {
         const grid = SemanticGrid32.fromJSON(levelData.semantic_grid)
+        const canvasWidth = clampCanvasSize(levelData.canvas_width ?? levelData.level_plan?.level_width ?? SemanticGrid32.WIDTH)
+        const canvasHeight = clampCanvasSize(levelData.canvas_height ?? levelData.level_plan?.level_height ?? SemanticGrid32.HEIGHT)
         const byCollision = (col) => tileTypes.find(t => t.collision_type === col)?.id ?? 0
         const ladderTileId = byCollision('ladder')
 
@@ -204,33 +229,37 @@ export default function Levels({
           hazard:    byCollision('hazard'),
           ladder:    0,
         })
-        const data = new SemanticToTilemap(tileIds).convert(grid)
-        setTilemapData({ width: SemanticGrid32.WIDTH, height: SemanticGrid32.HEIGHT, data })
+        const baseData = new SemanticToTilemap(tileIds).convert(grid)
+        const data = Array.from({ length: canvasHeight }, (_, y) =>
+          Array.from({ length: canvasWidth }, (_, x) =>
+            (y < SemanticGrid32.HEIGHT && x < SemanticGrid32.WIDTH) ? baseData[y][x] : null
+          )
+        )
+        setTilemapData({ width: canvasWidth, height: canvasHeight, data })
 
         // Ladder layer — only cells flagged LADDER
         if (!levelData.ladder_tilemap) {
-          const ladderLayerData = Array.from({ length: SemanticGrid32.HEIGHT }, (_, y) =>
-            Array.from({ length: SemanticGrid32.WIDTH }, (_, x) =>
-              (grid.get(x, y) & Cell.LADDER) ? ladderTileId : null
+          const ladderLayerData = Array.from({ length: canvasHeight }, (_, y) =>
+            Array.from({ length: canvasWidth }, (_, x) =>
+              (y < SemanticGrid32.HEIGHT && x < SemanticGrid32.WIDTH && (grid.get(x, y) & Cell.LADDER))
+                ? ladderTileId
+                : null
             )
           )
           const hasAnyLadder = ladderLayerData.some(row => row.some(c => c !== null))
           if (hasAnyLadder) {
-            setLadderData({ width: SemanticGrid32.WIDTH, height: SemanticGrid32.HEIGHT, data: ladderLayerData })
+            setLadderData({ width: canvasWidth, height: canvasHeight, data: ladderLayerData })
           }
         }
       } catch {
-        setTilemapData({ width: SemanticGrid32.WIDTH, height: SemanticGrid32.HEIGHT,
-          data: Array(SemanticGrid32.HEIGHT).fill(null).map(() => Array(SemanticGrid32.WIDTH).fill(null)) })
+        setTilemapData(createEmptyTilemap(SemanticGrid32.WIDTH, SemanticGrid32.HEIGHT))
       }
     } else {
-      setTilemapData({
-        width: 50,
-        height: 30,
-        data: Array(30).fill(null).map(() => Array(50).fill(null))
-      })
+      const canvasWidth = clampCanvasSize(levelData?.canvas_width ?? 32)
+      const canvasHeight = clampCanvasSize(levelData?.canvas_height ?? 32)
+      setTilemapData(createEmptyTilemap(canvasWidth, canvasHeight))
     }
-  }, [currentLevel?.id])
+  }, [currentLevel?.id, tileTypes, clampCanvasSize, createEmptyTilemap])
   
   // Group entities by type for object hierarchy
   const entityGroups = useMemo(() => {
@@ -280,13 +309,14 @@ export default function Levels({
   const handleLadderTileChange = useCallback((x, y, tileId) => {
     tilemapDirty.current = true
     setLadderData(prev => {
-      const base = prev || { width: SemanticGrid32.WIDTH, height: SemanticGrid32.HEIGHT,
-        data: Array(SemanticGrid32.HEIGHT).fill(null).map(() => Array(SemanticGrid32.WIDTH).fill(null)) }
+      const width = tilemapData?.width || SemanticGrid32.WIDTH
+      const height = tilemapData?.height || SemanticGrid32.HEIGHT
+      const base = prev || createEmptyTilemap(width, height)
       const newData = base.data.map(row => [...row])
       if (newData[y]) newData[y][x] = tileId
       return { ...base, data: newData }
     })
-  }, [])
+  }, [tilemapData, createEmptyTilemap])
 
   // Debounced tilemap save: notify parent 500ms after last tile change (only if user edited)
   const tilemapSaveTimer = useRef(null)
@@ -323,6 +353,8 @@ export default function Levels({
   const handleGenerate = () => {
     onGenerateLevel({
       seed: seed !== '' ? parseInt(seed, 10) : null,
+      level_width: clampCanvasSize(levelWidth),
+      level_height: clampCanvasSize(levelHeight),
       difficulty,
       verticality,
       hazard_density: hazardDensity,
@@ -400,6 +432,8 @@ export default function Levels({
       if (plan.allow_ladders       !== undefined) setAllowLadders(plan.allow_ladders)
       if (plan.style_tags          !== undefined) setStyleTags(plan.style_tags.join(', '))
       if (plan.seed                !== undefined) setSeed(String(plan.seed))
+      if (plan.level_width         !== undefined) setLevelWidth(clampCanvasSize(plan.level_width))
+      if (plan.level_height        !== undefined) setLevelHeight(clampCanvasSize(plan.level_height))
 
       // If interpret returns explicit entity requirements, use them.
       // Otherwise, infer from description using project entity type names (e.g. "12 coins").
@@ -456,35 +490,40 @@ export default function Levels({
 
         <div className="levels-workspace">
           <aside className="levels-sidebar" style={{ width: leftWidth }}>
-            {/* Sidebar Tabs */}
-            <div className="sidebar-tabs">
-              <button 
-                className={`sidebar-tab ${sidebarTab === 'layers' ? 'active' : ''}`}
-                onClick={() => setSidebarTab('layers')}
-              >
-                📑 Layers
-              </button>
-              <button 
-                className={`sidebar-tab ${sidebarTab === 'levels' ? 'active' : ''}`}
-                onClick={() => setSidebarTab('levels')}
-              >
-                🗺 Levels
-              </button>
+            <div className="levels-sidebar-header">
+              <h3>Level Tree</h3>
+              <span className="count-badge">{levels.length}</span>
             </div>
-            
-            {/* Layers Tab Content */}
-            {sidebarTab === 'layers' && (
-              <>
-                <div className="levels-sidebar-header">
-                  <h3>Level Layers</h3>
-                  {!currentLevel && <span className="hint-text">Select a level</span>}
+            <div className="level-tree-list">
+              {levels.length === 0 ? (
+                <div className="empty-levels small">
+                  <div className="empty-icon">🗺</div>
+                  <p>No levels yet</p>
                 </div>
-                <div className="layers-list">
+              ) : levels.map(level => {
+                const isExpanded = expandedLevelId === level.id
+                const isSelected = currentLevel?.id === level.id
+                const levelData = parseLevelData(level.level_data)
+                const previewLadderData = isSelected ? ladderData : levelData?.ladder_tilemap
+                return (
+                  <div key={level.id} className={`level-tree-node ${isSelected ? 'selected' : ''}`}>
+                    <button
+                      className={`level-tree-item ${isExpanded ? 'expanded' : ''}`}
+                      onClick={() => handleTreeLevelClick(level)}
+                    >
+                      <span className="level-tree-chevron">{isExpanded ? '▾' : '▸'}</span>
+                      <span className="level-tree-name">{level.name}</span>
+                      <span className={`diff-badge ${level.difficulty}`}>{level.difficulty}</span>
+                    </button>
+                    {isExpanded && (
+                      <div className="level-tree-children">
+                        {/* fake layers-list scope start */}
+                        <div className="layers-list">
                   {/* Entities Layer */}
-                  <div className={`layer-item-group ${activeLayer === LAYERS.ENTITIES ? 'active' : ''}`}>
-                    <div 
-                      className="layer-item"
-                      onClick={() => setActiveLayer(LAYERS.ENTITIES)}
+                  <div className={`layer-item-group ${activeLayer === LAYERS.ENTITIES && isSelected ? 'active' : ''}`}>
+                    <div
+                      className={`layer-item ${activeLayer === LAYERS.ENTITIES && isSelected ? 'active' : ''}`}
+                      onClick={() => { if (!isSelected) handleSelectLevel(level); setActiveLayer(LAYERS.ENTITIES) }}
                     >
                       <button 
                         className="layer-visibility-btn"
@@ -503,8 +542,7 @@ export default function Levels({
                       </span>
                     </div>
                     
-                    {/* Object Hierarchy - shown when Entities layer is active and selected */}
-                    {activeLayer === LAYERS.ENTITIES && currentLevel && currentLevelData && (
+                    {activeLayer === LAYERS.ENTITIES && isSelected && currentLevelData && (
                       <div className="object-hierarchy">
                         {/* Platforms */}
                         {currentLevelData.platforms && currentLevelData.platforms.length > 0 && (
@@ -541,17 +579,20 @@ export default function Levels({
                                 <span className="count-badge">{entities.length}</span>
                               </div>
                               <div className="object-items">
-                                {entities.map((entity, i) => (
+                                {entities.map((entity, i) => {
+                                  const globalIndex = currentLevelData.entities.indexOf(entity)
+                                  return (
                                   <div 
                                     key={i}
-                                    className={`object-item ${activeSelectedObject?.type === 'entity' && activeSelectedObject?.data === entity ? 'selected' : ''}`}
-                                    onClick={() => handleSelectObject({ type: 'entity', data: entity, entityType: type, index: i })}
+                                    className={`object-item ${activeSelectedObject?.type === 'entity' && activeSelectedObject?.index === globalIndex ? 'selected' : ''}`}
+                                    onClick={() => handleSelectObject({ type: 'entity', data: entity, entityType: type, index: globalIndex })}
                                   >
                                     <span className="item-icon">{typeInfo.emoji}</span>
                                     <span className="item-name">{entity.name || `${type} ${i + 1}`}</span>
                                     <span className="item-coords">@ {entity.x}, {entity.y}</span>
                                   </div>
-                                ))}
+                                  )
+                                })}
                               </div>
                             </div>
                           )
@@ -612,8 +653,8 @@ export default function Levels({
                   
                   {/* Ladder Layer */}
                   <div
-                    className={`layer-item ${activeLayer === LAYERS.LADDERS ? 'active' : ''}`}
-                    onClick={() => setActiveLayer(LAYERS.LADDERS)}
+                    className={`layer-item ${activeLayer === LAYERS.LADDERS && isSelected ? 'active' : ''}`}
+                    onClick={() => { if (!isSelected) handleSelectLevel(level); setActiveLayer(LAYERS.LADDERS) }}
                   >
                     <button
                       className="layer-visibility-btn"
@@ -628,14 +669,14 @@ export default function Levels({
                     <span className="layer-icon">🪜</span>
                     <span className="layer-name">Ladders</span>
                     <span className="layer-count">
-                      {ladderData ? `${ladderData.width}x${ladderData.height}` : '—'}
+                      {previewLadderData ? `${previewLadderData.width}x${previewLadderData.height}` : '—'}
                     </span>
                   </div>
 
                   {/* Tilemap Layer */}
                   <div
-                    className={`layer-item ${activeLayer === LAYERS.TILEMAP ? 'active' : ''}`}
-                    onClick={() => setActiveLayer(LAYERS.TILEMAP)}
+                    className={`layer-item ${activeLayer === LAYERS.TILEMAP && isSelected ? 'active' : ''}`}
+                    onClick={() => { if (!isSelected) handleSelectLevel(level); setActiveLayer(LAYERS.TILEMAP) }}
                   >
                     <button
                       className="layer-visibility-btn"
@@ -650,61 +691,33 @@ export default function Levels({
                     <span className="layer-icon">🟫</span>
                     <span className="layer-name">Tilemap</span>
                     <span className="layer-count">
-                      {currentLevelData?.tilemap ? `${currentLevelData.tilemap.width}x${currentLevelData.tilemap.height}` : '—'}
+                      {levelData?.tilemap ? `${levelData.tilemap.width}x${levelData.tilemap.height}` : '—'}
                     </span>
                   </div>
-                </div>
-                
-                {/* Tilemap Settings (when tilemap or ladder layer is active) */}
-                {(activeLayer === LAYERS.TILEMAP || activeLayer === LAYERS.LADDERS) && currentLevel && (
-                  <div className="tilemap-settings">
-                    <h4>Tilemap Settings</h4>
-                    <div className="setting-row">
-                      <span>Tile Size</span>
-                      <span>{currentProject?.tile_size || 32}px</span>
-                    </div>
-                    <div className="setting-row">
-                      <span>Tile Types</span>
-                      <span>{tileTypes.length}</span>
-                    </div>
-                    <p className="tilemap-hint">
-                      Select a tile type from the right palette and draw on the canvas.
-                    </p>
+                        </div>{/* end layers-list */}
+                      </div>
+                    )}
                   </div>
-                )}
-              </>
-            )}
-            
-            {/* Levels Tab Content */}
-            {sidebarTab === 'levels' && (
-              <>
-                <div className="levels-sidebar-header">
-                  <h3>Project Levels</h3>
-                  <span className="count-badge">{levels.length}</span>
+                )
+              })}
+            </div>
+
+            {/* Tilemap Settings */}
+            {(activeLayer === LAYERS.TILEMAP || activeLayer === LAYERS.LADDERS) && currentLevel && (
+              <div className="tilemap-settings">
+                <h4>Tilemap Settings</h4>
+                <div className="setting-row">
+                  <span>Tile Size</span>
+                  <span>{currentProject?.tile_size || 32}px</span>
                 </div>
-                <div className="levels-sidebar-list">
-                  {levels.length === 0 ? (
-                    <div className="empty-levels small">
-                      <div className="empty-icon">🗺</div>
-                      <p>No levels yet</p>
-                    </div>
-                  ) : (
-                    levels.map(level => (
-                      <button
-                        key={level.id}
-                        className={`level-list-item ${currentLevel?.id === level.id ? 'active' : ''}`}
-                        onClick={() => handleSelectLevel(level)}
-                      >
-                        <div className="level-list-name">{level.name}</div>
-                        <div className="level-list-meta">
-                          <span>{level.genre}</span>
-                          <span className={`diff-badge ${level.difficulty}`}>{level.difficulty}</span>
-                        </div>
-                      </button>
-                    ))
-                  )}
+                <div className="setting-row">
+                  <span>Tile Types</span>
+                  <span>{tileTypes.length}</span>
                 </div>
-              </>
+                <p className="tilemap-hint">
+                  Select a tile type from the right palette and draw on the canvas.
+                </p>
+              </div>
             )}
           </aside>
 
@@ -991,6 +1004,29 @@ export default function Levels({
                       <label>Seed <span className="label-hint">leave blank for random</span></label>
                       <input type="number" min="0" placeholder="random"
                         value={seed} onChange={e => setSeed(e.target.value)} />
+                    </div>
+                  </div>
+
+                  <div className="form-row form-row-inline">
+                    <div className="form-group half">
+                      <label>Level Width <span className="label-hint">tiles</span></label>
+                      <input
+                        type="number"
+                        min="8"
+                        max="256"
+                        value={levelWidth}
+                        onChange={e => setLevelWidth(clampCanvasSize(e.target.value))}
+                      />
+                    </div>
+                    <div className="form-group half">
+                      <label>Level Height <span className="label-hint">tiles</span></label>
+                      <input
+                        type="number"
+                        min="8"
+                        max="256"
+                        value={levelHeight}
+                        onChange={e => setLevelHeight(clampCanvasSize(e.target.value))}
+                      />
                     </div>
                   </div>
 

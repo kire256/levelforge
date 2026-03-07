@@ -309,6 +309,8 @@ function App() {
   }
   
   const handleSelectProject = async (project) => {
+    // Clear current level immediately so the canvas is blank until a level is selected
+    setCurrentLevel(null)
     setCurrentProject(project)
     setSelectedItem({ type: 'Project', name: project.name, ...project })
     
@@ -612,7 +614,6 @@ function App() {
       await loadLevels(currentProject.id)
       if (currentLevel?.id === level.id) {
         setCurrentLevel(null)
-        setActiveTab('dashboard')
       }
       if (selectedItem?.id === level.id && selectedItem?.type === 'Level') setSelectedItem(null)
       setSelectedObject(null) // Clear selected object too
@@ -623,6 +624,76 @@ function App() {
       alert('Failed to delete level')
     }
   }
+
+  const handleResizeLevel = useCallback(async () => {
+    if (!currentLevel) return
+
+    const sourceLevel = displayLevel || currentLevel
+    let levelData = null
+    try {
+      levelData = typeof sourceLevel.level_data === 'string'
+        ? JSON.parse(sourceLevel.level_data)
+        : { ...sourceLevel.level_data }
+    } catch {
+      alert('Unable to parse level data for resizing.')
+      return
+    }
+
+    if (!levelData) return
+
+    const currentWidth = Number(levelData.tilemap?.width || levelData.ladder_tilemap?.width || levelData.canvas_width || 32)
+    const currentHeight = Number(levelData.tilemap?.height || levelData.ladder_tilemap?.height || levelData.canvas_height || 32)
+
+    const input = prompt('Resize level to WIDTHxHEIGHT (8-256), e.g. 64x32', `${currentWidth}x${currentHeight}`)
+    if (!input) return
+
+    const match = input.match(/^\s*(\d+)\s*[xX]\s*(\d+)\s*$/)
+    if (!match) {
+      alert('Invalid size format. Please use WIDTHxHEIGHT (example: 64x32).')
+      return
+    }
+
+    const clampSize = (v) => Math.max(8, Math.min(256, Number(v) || 32))
+    const newWidth = clampSize(match[1])
+    const newHeight = clampSize(match[2])
+
+    if (newWidth === currentWidth && newHeight === currentHeight) return
+
+    const resizeTilemap = (map) => {
+      const srcData = Array.isArray(map?.data) ? map.data : []
+      const resized = Array.from({ length: newHeight }, (_, y) =>
+        Array.from({ length: newWidth }, (_, x) => srcData[y]?.[x] ?? null)
+      )
+      return { width: newWidth, height: newHeight, data: resized }
+    }
+
+    levelData.tilemap = resizeTilemap(levelData.tilemap)
+    if (levelData.ladder_tilemap) {
+      levelData.ladder_tilemap = resizeTilemap(levelData.ladder_tilemap)
+    }
+    levelData.canvas_width = newWidth
+    levelData.canvas_height = newHeight
+
+    const updatedLevel = { ...sourceLevel, level_data: JSON.stringify(levelData) }
+    setCurrentLevel(updatedLevel)
+    setLevelWithHistory(updatedLevel, false)
+    setLevels(prev => prev.map(l => l.id === updatedLevel.id ? updatedLevel : l))
+    if (selectedItem?.type === 'Level' && selectedItem?.id === updatedLevel.id) {
+      setSelectedItem({ type: 'Level', ...updatedLevel })
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/api/levels/${currentLevel.id}?level_data=${encodeURIComponent(JSON.stringify(levelData))}`, {
+        method: 'PUT'
+      })
+      if (!res.ok) throw new Error('Failed to resize level')
+      logToConsole(`Resized level to ${newWidth}x${newHeight}`, 'success')
+    } catch (err) {
+      console.error('Resize level failed:', err)
+      logToConsole('Failed to resize level', 'error')
+      alert('Failed to resize level')
+    }
+  }, [currentLevel, displayLevel, selectedItem, setLevelWithHistory, logToConsole])
   
   // Track latest selectedObject to avoid stale closures in inspector
   const selectedObjectRef = useRef(selectedObject)
@@ -765,6 +836,10 @@ function App() {
               </div>
             )}
             <div className="level-field">
+              <label>Canvas</label>
+              <span className="level-value">{levelData.canvas_width || levelData.tilemap?.width || 32}x{levelData.canvas_height || levelData.tilemap?.height || 32}</span>
+            </div>
+            <div className="level-field">
               <label>Player Spawn</label>
               <span className="level-value">{levelData.player_spawn ? `(${levelData.player_spawn.x}, ${levelData.player_spawn.y})` : 'Not set'}</span>
             </div>
@@ -772,11 +847,17 @@ function App() {
               <label>Goal</label>
               <span className="level-value">{levelData.goal ? `(${levelData.goal.x}, ${levelData.goal.y})` : 'Not set'}</span>
             </div>
+
+            <div className="level-field" style={{ marginTop: '10px' }}>
+              <button className="btn-secondary btn-small" onClick={handleResizeLevel}>
+                ⇔ Resize Level
+              </button>
+            </div>
           </div>
         )}
       </div>
     )
-  }, [currentLevel])
+  }, [currentLevel, handleResizeLevel])
 
   const handleSelectEntity = (entity) => {
     setSelectedItem({ type: 'Entity', ...entity })
